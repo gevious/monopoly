@@ -4,7 +4,7 @@ Monopoly clone, to help visually impaired keep track of resources
 # Roadmap 
 - [x] Infinite loop asking for dice roll
 - [x] Entering num players, and record name of each player
-- [ ] Show summary of all players at start of each turn (money, position, assets)
+- [x] Show summary of all players at start of each turn (money, position, assets)
 - [ ] Each player has a turn. Dice number moves player to correct position
 - [ ] Game displays position player lands on
 - [ ] Game displays options a player has on each position

@@ -11,12 +11,13 @@ Monopoly clone, to help visually impaired keep track of resources
 - [x] Player can receive money from bank
 - [x] Player can pay bank money
 - [ ] Player can choose to buy street (if applicable)
-- [ ] Player can choose to auction street (if applicable)
 - [ ] Player is charged rent for basic streets
+- [ ] Player can choose to auction street (if applicable)
 - [ ] Player is charged rent for streets if player owns all streets
 - [ ] Player is charged rent for stations
 - [ ] Player is charged rent for water/electricity
 - [ ] Player is sent to jail
+- [ ] Player is released from jail
 - [ ] Player is charged for events like income tax
 - [ ] Player can leave jail (using pay $50, roll 3x or using get-out-of-jail card)
 - [ ] Community chest cards shuffled at start of the game

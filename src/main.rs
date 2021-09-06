@@ -50,8 +50,63 @@ mod board {
             Position::new("Boardwalk", 39, Some(400), None)
         ];
 
+    static CHANCE: [Card; 16] = [
+            Card::new("GO TO JAIL", None, Some(10)),
+            Card::new("Advance to St. Charles Place", None, Some(11)), // TODO: ensure turn 'restarts' after advancing 
+            Card::new("Make general repairs on all your property. House, $25 each; Hotel, $100 each", None, None), // TODO: calculate amount
+            Card::new("Advance to the next railroad. If unowned, you can buy it. if owned, pay twice the rent", None, None), // TODO: calculate amount
+            Card::new("You have been elected chairman of the board. Pay each player $50", Some(50), None), // TODO: calculate amount
+            Card::new("Take a trip to Reading Railroad.", None, Some(5)),
+            Card::new("Speeding fine. Pay $15", Some(15), None),
+            Card::new("Your building load matures. Receive $150", Some(-150), None),
+            Card::new("Advance to Boardwalk", None, Some(39)),
+            Card::new("Go back three spaces", None, Some(-3)), // TODO: move relative to current position
+            Card::new("Advance to Illinois Avenue", None, Some(24)),
+            Card::new("Advance to GO. Collect $200", Some(-200), Some(0)),
+            Card::new("GET OUT OF JAIL FREE.", None, None), // TODO: player keeps this card
+            Card::new("Take all $100 bills from the Bank and throw them in the air", None, None), // TODO: how to model this? Random allocation?
+            Card::new("Advance to the nearest railroad. If unowned, you can buy it. If owned, pay twice the rent", None, None), // TODO: go to closest 5,15,25,35. 2x amount
+            Card::new("Advance to the nearest utility. If unowned, you can buy it. If owned, roll the dice, and pay the owner 10x the roll", None, None) // TODO: pay relative to roll
+    ];
+
+    static COMMUNITY_CHEST: [Card; 16] = [
+            Card::new("You are assessed for Street repairs: $40 per House, $115 per Hotel", None, None),
+            Card::new("GET OUT OF JAIL FREE", None, None),
+            Card::new("You have won second prize in a beauty contest. Collect $10", Some(-10), None),
+            Card::new("Life insurance matures. Collect $100", Some(-100), None),
+            Card::new("It's your birthday. Collect $10 from each player", Some(-10), None), // TODO: calculate amount
+            Card::new("Advance to GO. Collect $200", Some(-200), Some(0)), // TODO: calculate amount
+            Card::new("You inherit $100", Some(-100), None),
+            Card::new("Bank error in your favor. Collect $200", Some(-200), None),
+            Card::new("From sale of stock, you get $50", Some(-50), None),
+            Card::new("Collect $25 consultancy fee", Some(-25), None),
+            Card::new("Holiday fund matures. Collect $100", Some(-100), None),
+            Card::new("Doctor's fees. Pay 50", Some(50), None),
+            Card::new("Hospital fees. Pay 1000", Some(100), None),
+            Card::new("GO TO JAIL", None, Some(10)),
+            Card::new("School fees. Pay $50", None, Some(50)),
+            Card::new("Income tax refund. Collect $20", None, Some(-20))
+    ];
+
     pub fn get_position<'a>(pos: usize) -> &'a Position<'a> {
         BOARD.get(pos).unwrap()
+    }
+
+    pub struct Card<'a> {
+        pub description: &'a str,
+        pub pay_amount: Option<i32>,
+        pub position: Option<i32>
+
+    }
+
+    impl<'a> Card<'a> {
+        pub const fn new(description: &'a str, pay_amount: Option<i32>, position: Option<i32>) -> Self {
+            Self {
+                description,
+                pay_amount,
+                position,
+            }
+        }
     }
 
     pub struct Position<'a> {
@@ -300,7 +355,7 @@ fn execute_turn<'a>(player: &'a mut board::Player) {
         },
         38 => {
             println!("Luxury Tax! Pay $100");
-            player.spend_cash(200);
+            player.spend_cash(100);
         },
         30 => {
             player.go_to_jail();
@@ -325,7 +380,7 @@ fn execute_turn<'a>(player: &'a mut board::Player) {
                 },
                 None => {
                     let price = p.price.unwrap();
-                    println!("Nobody owns it yet. You can buy it for {}", price);
+                    println!("Nobody owns it yet. You can buy it for ${}", price);
                     if player.cash > price {
                         // TODO: Buy
                         // FIXME: uncomment

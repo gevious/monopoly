@@ -8,17 +8,16 @@ Monopoly clone, to help visually impaired keep track of resources
 - [x] Each player has a turn. Dice number moves player to correct position
 - [x] Game displays position player lands on
 - [x] Game displays options a player has on each position
+- [x] Player is charged for events like income tax
 - [x] Player can receive money from bank
 - [x] Player can pay bank money
-- [ ] Player can choose to buy street (if applicable)
-- [ ] Player is charged rent for basic streets
+- [x] Player can choose to buy street (if applicable)
+- [x] Player is charged rent for basic streets
+- [x] Player is sent to jail
 - [ ] Player can choose to auction street (if applicable)
 - [ ] Player is charged rent for streets if player owns all streets
 - [ ] Player is charged rent for stations
 - [ ] Player is charged rent for water/electricity
-- [ ] Player is sent to jail
-- [ ] Player is released from jail
-- [ ] Player is charged for events like income tax
 - [ ] Player can leave jail (using pay $50, roll 3x or using get-out-of-jail card)
 - [ ] Community chest cards shuffled at start of the game
 - [ ] Chance cards shuffled at start of the game

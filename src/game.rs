@@ -58,11 +58,12 @@ enum CardAction {
     Payment_Dice, // payment calculated based on dice roll
     Payment_Players, // payment calculated based on dice roll
     Jail, 
+    Jail_Release, 
     Unknown
     // TODO: add other actions
 }
 
-static CHANCE_CARDS: [Card; 15 as usize] = [
+static CHANCE_CARDS: [Card; 16 as usize] = [
         Card::new("GO TO JAIL!", CardAction::Jail, None, None),
         Card::new("Advance to St. Charles Place", CardAction::Movement, None, Some(11)),
         Card::new("Make general repairs on all your property. House, $25 each; Hotel, $100 each", CardAction::Payment_Dice, Some(25), None), // TODO: calculate amount
@@ -75,14 +76,14 @@ static CHANCE_CARDS: [Card; 15 as usize] = [
         Card::new("Go back three spaces", CardAction::Movement_Relative, None, Some(-3)), // TODO: move relative to current square
         Card::new("Advance to Illinois Avenue", CardAction::Movement, None, Some(24)),
         Card::new("Advance to GO. Collect $200", CardAction::Movement, None, Some(0)),
-        Card::new("GET OUT OF JAIL FREE.", CardAction::Unknown, None, None), // TODO: player keeps this card
-//        Card::new("Take all $100 bills from the Bank and throw them in the air", CardAction::Unknown, None, None), // TODO: how to model this? Random allocation?
+        Card::new("GET OUT OF JAIL FREE.", CardAction::Jail_Release, None, None),
+        Card::new("Take all $100 bills from the Bank and throw them in the air", CardAction::Unknown, None, None), // TODO: how to model this? Random allocation?
         Card::new("Advance to the nearest railroad. If unowned, you can buy it. If owned, pay twice the rent", CardAction::Unknown, None, None), // TODO: go to closest 5,15,25,35. 2x amount
         Card::new("Advance to the nearest utility. If unowned, you can buy it. If owned, roll the dice, and pay the owner 10x the roll", CardAction::Unknown, None, None), // TODO: pay relative to roll
 ];
 static COMMUNITY_CHEST_CARDS: [Card; 16 as usize] = [
         Card::new("You are assessed for Street repairs: $40 per House, $115 per Hotel", CardAction::Payment, Some(0), None),
-        Card::new("GET OUT OF JAIL FREE", CardAction::Unknown, None, None),
+        Card::new("GET OUT OF JAIL FREE.", CardAction::Jail_Release, None, None),
         Card::new("You have won second prize in a beauty contest. Collect $10", CardAction::Payment, Some(-10), None),
         Card::new("Life insurance matures. Collect $100", CardAction::Payment, Some(-100), None),
         Card::new("It's your birthday. Collect $10 for each player", CardAction::Payment_Players, Some(-10), None), // TODO: calculate amount
@@ -126,6 +127,7 @@ pub struct Player {
     turn_idx: usize, // idx in the group of players. need this to match asset
     cash: i32,
     is_in_jail: bool,
+    num_get_out_of_jail_cards: i32,
 }
 
 pub struct Square {
@@ -214,10 +216,28 @@ impl Game {
             CardAction::Jail => {
                 player.go_to_jail();
             },
+            CardAction::Jail_Release => {
+                player.num_get_out_of_jail_cards += 1
+            },
             _ => {
                 // TODO: implement others
             }
         }
+    }
+
+    /// Player tries to break out of jail
+    fn break_out_of_jail(&self, player: &mut Player) {
+        if !player.is_in_jail {
+            return;
+        }
+        if player.num_get_out_of_jail_cards > 0{
+            player.num_get_out_of_jail_cards -= 1;
+            player.is_in_jail = false;
+        } else if player.cash >= 50 {
+            player.transact_cash(-50);
+            player.is_in_jail = false;
+        }
+        // TODO: Implement roll double digits to get out
     }
 
     /// Execute the turn of a player
@@ -225,6 +245,8 @@ impl Game {
     // the rules for that new square execute. Lastly, other players may want to execute 
     // transactions
     fn execute_turn(&self, player: &mut Player, dice_roll: i32) {
+        self.break_out_of_jail(player); // does nothing if player is not in jail
+
         let old_pos = player.position;
         player.advance(dice_roll);
         if player.position < old_pos {
@@ -340,8 +362,11 @@ impl<'a> fmt::Display for Player {
             Square: {}
             Cash: {}
             In Jail?: {}
+            Get-Out-Of-Jail cards: {}
             Streets: {:?}",
-            self.name, square.name, self.cash, self.is_in_jail, streets)
+            self.name, square.name, self.cash,
+            self.is_in_jail, self.num_get_out_of_jail_cards,
+            streets)
         // TODO: if streets have houses/hotels, print them on the same line
         // TODO: if has get-out-of-jail card, then print it
         // TODO: if has mortgagages, print them
@@ -356,6 +381,7 @@ impl Player {
             turn_idx: idx,
             cash: 1500, // 2x500, 4x100, 1x50, 1x20, 2x10, 1x5, 5x1
             is_in_jail: false,
+            num_get_out_of_jail_cards: 0,
         }
     }
 
@@ -499,15 +525,37 @@ mod tests {
     }
 
     #[test]
-    fn test_go_to_jail() {
+    fn jail_time() {
         let g = init(vec!["Test".to_string()]);
 
         // go to jail
         let mut p = g.players.get(g.active_player.get()).unwrap().borrow_mut();
+        p.num_get_out_of_jail_cards = 1;
         assert_eq!(p.is_in_jail, false);
+
         g.execute_turn(&mut p, 30);
         assert_eq!(p.position, 10);
         assert_eq!(p.is_in_jail, true);
+        assert_eq!(p.cash, 1500);
+        assert_eq!(p.num_get_out_of_jail_cards, 1);
+
+        // now release, using card
+        g.execute_turn(&mut p, 10);
+        assert_eq!(p.num_get_out_of_jail_cards, 0);
+        assert_eq!(p.is_in_jail, false);
+        assert_eq!(p.cash, 1500);
+
+        // back in jail
+        g.execute_turn(&mut p, 10);
+        assert_eq!(p.is_in_jail, true);
+        assert_eq!(p.num_get_out_of_jail_cards, 0);
+        assert_eq!(p.cash, 1500);
+
+        // now release, paying $50
+        g.execute_turn(&mut p, 10);
+        assert_eq!(p.is_in_jail, false);
+        assert_eq!(p.num_get_out_of_jail_cards, 0);
+        assert_eq!(p.cash, 1450);
     }
 
     #[test]

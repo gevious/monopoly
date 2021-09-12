@@ -9,46 +9,46 @@ use std::cell::{Cell, RefCell};
 
 const BOARD_SIZE: i32 = 40; // 40 squares on the board
 static SQUARES: [Square; BOARD_SIZE as usize] = [
-    Square::new("Just chillin' at the start", None, None),
-    Square::new("Mediterranean Avenue", Some(60), Some(2)),
-    Square::new("Community Chest", None, None),
-    Square::new("Baltic Avenue", Some(60), Some(4)),
-    Square::new("Income Tax", None, None),
-    Square::new("Reading Railroad", Some(200), Some(25)),
-    Square::new("Oriental Avenue", Some(100), Some(6)),
-    Square::new("Chance", None, None),
-    Square::new("Vermont Avenue", Some(100), Some(6)),
-    Square::new("Connecticut Avenue", Some(120), Some(8)),
-    Square::new("Visiting Jail", None, None),
-    Square::new("St. Charles Place", Some(140), Some(10)),
-    Square::new("Electric Company", Some(150), None),
-    Square::new("States Avenue", Some(140), Some(10)),
-    Square::new("Virginia Avenue", Some(160), Some(12)),
-    Square::new("Pennsylvania Railroad", Some(200), Some(25)),
-    Square::new("St. James Place", Some(180), Some(14)),
-    Square::new("Community Chest", None, None),
-    Square::new("Tennessee Avenue", Some(180), Some(14)),
-    Square::new("New York Avenue", Some(200), Some(16)),
-    Square::new("Yay! Free Parking", None, None),
-    Square::new("Kentucky Avenue", Some(220), Some(18)),
-    Square::new("Chance", None, None),
-    Square::new("Indiana Avenue", Some(220), Some(18)),
-    Square::new("Illinois Avenue", Some(240), Some(20)),
-    Square::new("B. & O. Railroad", Some(200), Some(25)),
-    Square::new("Atlantic Avenue", Some(260), Some(22)),
-    Square::new("Ventnor Avenue", Some(260), Some(22)),
-    Square::new("Water Works", Some(150), None),
-    Square::new("Marvin Gardens", Some(280), Some(24)),
-    Square::new("Go To Jail", None, None),
-    Square::new("Pacific Avenue", Some(300), Some(26)),
-    Square::new("North Carolina Avenue", Some(300), Some(26)),
-    Square::new("Community Chest", None, None),
-    Square::new("Pennsylvania Avenue", Some(320), Some(28)),
-    Square::new("Short Line", Some(200), Some(25)),
-    Square::new("Chance", None, None),
-    Square::new("Park Place", Some(350), Some(35)),
-    Square::new("Luxury Tax", None, None),
-    Square::new("Boardwalk", Some(400), Some(50)),
+    Square::new("Just chillin' at the start", SquareType::Corner, None, None),
+    Square::new("Mediterranean Avenue", SquareType::Street, Some(60), Some(2)),
+    Square::new("Community Chest", SquareType::CommunityCard, None, None),
+    Square::new("Baltic Avenue", SquareType::Street, Some(60), Some(4)),
+    Square::new("Income Tax", SquareType::Tax, None, None),
+    Square::new("Reading Railroad", SquareType::Station, Some(200), Some(25)),
+    Square::new("Oriental Avenue", SquareType::Street, Some(100), Some(6)),
+    Square::new("Chance", SquareType::ChanceCard, None, None),
+    Square::new("Vermont Avenue", SquareType::Street, Some(100), Some(6)),
+    Square::new("Connecticut Avenue", SquareType::Street, Some(120), Some(8)),
+    Square::new("Visiting Jail", SquareType::Corner, None, None),
+    Square::new("St. Charles Place", SquareType::Street, Some(140), Some(10)),
+    Square::new("Electric Company", SquareType::Utility, Some(150), None),
+    Square::new("States Avenue", SquareType::Street, Some(140), Some(10)),
+    Square::new("Virginia Avenue", SquareType::Street, Some(160), Some(12)),
+    Square::new("Pennsylvania Railroad", SquareType::Station, Some(200), Some(25)),
+    Square::new("St. James Place", SquareType::Street, Some(180), Some(14)),
+    Square::new("Community Chest", SquareType::CommunityCard, None, None),
+    Square::new("Tennessee Avenue", SquareType::Street, Some(180), Some(14)),
+    Square::new("New York Avenue", SquareType::Street, Some(200), Some(16)),
+    Square::new("Yay! Free Parking", SquareType::Corner, None, None),
+    Square::new("Kentucky Avenue", SquareType::Street, Some(220), Some(18)),
+    Square::new("Chance", SquareType::ChanceCard, None, None),
+    Square::new("Indiana Avenue", SquareType::Street, Some(220), Some(18)),
+    Square::new("Illinois Avenue", SquareType::Street, Some(240), Some(20)),
+    Square::new("B. & O. Railroad", SquareType::Station, Some(200), Some(25)),
+    Square::new("Atlantic Avenue", SquareType::Street, Some(260), Some(22)),
+    Square::new("Ventnor Avenue", SquareType::Street, Some(260), Some(22)),
+    Square::new("Water Works", SquareType::Utility, Some(150), None),
+    Square::new("Marvin Gardens", SquareType::Street, Some(280), Some(24)),
+    Square::new("Go To Jail", SquareType::Corner, None, None),
+    Square::new("Pacific Avenue", SquareType::Street, Some(300), Some(26)),
+    Square::new("North Carolina Avenue", SquareType::Street, Some(300), Some(26)),
+    Square::new("Community Chest", SquareType::CommunityCard, None, None),
+    Square::new("Pennsylvania Avenue", SquareType::Street, Some(320), Some(28)),
+    Square::new("Short Line", SquareType::Street, Some(200), Some(25)),
+    Square::new("Chance", SquareType::ChanceCard, None, None),
+    Square::new("Park Place", SquareType::Street, Some(350), Some(35)),
+    Square::new("Luxury Tax", SquareType::Tax, None, None),
+    Square::new("Boardwalk", SquareType::Street, Some(400), Some(50)),
 ];
 
 enum CardAction {
@@ -61,6 +61,17 @@ enum CardAction {
     JailRelease, 
     Unknown
     // TODO: add other actions
+}
+
+#[derive(Debug)]
+enum SquareType {
+    ChanceCard,
+    CommunityCard,
+    Corner,
+    Station,
+    Street,
+    Tax,
+    Utility
 }
 
 const CHANCE_CARDS: [Card; 16 as usize] = [
@@ -134,6 +145,7 @@ pub struct Player {
 
 pub struct Square {
     name: &'static str,
+    square_type: SquareType,
     price: Option<i32>,
     rent: Option<i32>,
     asset: Asset
@@ -260,25 +272,30 @@ impl Game {
         // TODO: If 3 doubles, go to jail
         
         let square = SQUARES.get(player.position).unwrap();
-        match player.position {
-            0 | 10 | 20 => { // GO, Visiting Jail, Free Parking
-                println!("{}", square.name);
+        match square.square_type {
+            SquareType::Corner => {
+                if player.position == 30 {
+                    player.go_to_jail();
+                } else {
+                    println!("{}", square.name);
+                }
             },
-            4 => {
-                println!("Oh No! Pay $200 in Income Tax!");
-                player.transact_cash(-200);
+            SquareType::Tax => {
+                match player.position {
+                    4 => {
+                        println!("Oh No! Pay $200 in Income Tax!");
+                        player.transact_cash(-200);
+                    },
+                    38 => {
+                        println!("Oh No! Pay $100 in Luxury Tax!");
+                        player.transact_cash(-100);
+                    }
+                    _ => {println!("Error, undefined Tax"); }
+                }
             },
-            38 => {
-                println!("Oh No! Pay $100 in Luxury Tax!");
-                player.transact_cash(-100);
-            },
-            30 => {
-                player.go_to_jail();
-            },
-            // cards
-            2 | 17 | 33 | 7 | 22 | 36 => {
-                let (mut cards, ref_deck) = match player.position {
-                    2 | 17 | 33 => {
+            SquareType::CommunityCard | SquareType::ChanceCard => {
+                let (mut cards, ref_deck) = match square.square_type {
+                    SquareType::CommunityCard => {
                         print!("COMMUNITY CHEST: ");
                         let mut cards = self.community_cards.borrow_mut();
                         (cards, &COMMUNITY_CARDS)
@@ -294,7 +311,7 @@ impl Game {
                 self.execute_card(player, card);
                 cards.push(idx);
             },
-            _ => {
+            SquareType::Utility | SquareType::Station | SquareType::Street => {
                 println!("You landed on {}", square.name);
                 match square.asset.owner.get() {
                     Some(owner_idx) => { // this street is owned by somebody
@@ -303,9 +320,10 @@ impl Game {
                             println!("Phew! Luckily it's yours");
                             return;
                         }
+
                         let mut owner = self.players.get(owner_idx).unwrap().borrow_mut();
-                        let rent = square.calculate_rent();
-                        println!("Oh no! You pay {} ${}", owner.name, rent);
+                        let rent = square.calculate_rent(dice_roll);
+                        println!("Oh no! You pay ${} to {}", rent, owner.name);
                         player.transact_cash(-1 * rent);
                         owner.transact_cash(rent);
                     },
@@ -327,11 +345,12 @@ impl Game {
 }
 
 impl Square {
-    pub const fn new(name: &'static str, price: Option<i32>, rent: Option<i32>) -> Self {
+    const fn new(name: &'static str, square_type: SquareType, price: Option<i32>, rent: Option<i32>) -> Self {
         Self {
             name,
             price,
             rent,
+            square_type,
             asset: Asset::new()
         }
     }
@@ -339,15 +358,19 @@ impl Square {
     /// Calculate rent
     // Calculate rent, taking into account if a player owns all streets, and the number of
     // properties on the street.
-    pub fn calculate_rent(&self) -> i32 {
-        // check if space has a hotel/house
-        // check if player owns all streets
-        // TODO: Write test to calculate rent
-        match self.rent {
-            Some(r) => {
-                r
+    pub fn calculate_rent(&self, dice_roll: i32) -> i32 {
+        // TODO: check for owner owning street/stations, houses, hotels
+        match self.square_type {
+            SquareType::Utility => {
+                dice_roll * 4
             },
-            None => 0
+            SquareType::Station => {
+                self.rent.expect("Rent should exist")
+            },
+            SquareType::Street => {
+                self.rent.expect("Rent should exist")
+            }
+            _ => 0
         }
     }
 }
@@ -587,18 +610,23 @@ mod tests {
     fn test_calculate_rent() {
         // Baltic avenue
         let s = SQUARES.get(3).unwrap();
-        let r = s.calculate_rent();
+        let r = s.calculate_rent(3);
         assert_eq!(r, 4);
 
         // no-rent square
         let s = SQUARES.get(10).unwrap();
-        let r = s.calculate_rent();
+        let r = s.calculate_rent(10);
         assert_eq!(r, 0);
 
         // Income tax
         let s = SQUARES.get(4).unwrap();
-        let r = s.calculate_rent();
+        let r = s.calculate_rent(4);
         assert_eq!(r, 0);
+
+        // Utility
+        let s = SQUARES.get(12).unwrap();
+        let r = s.calculate_rent(8);
+        assert_eq!(r, 32); // 4 * 8
     }
 
     #[test]

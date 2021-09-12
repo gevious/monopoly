@@ -16,18 +16,18 @@ Monopoly clone, to help visually impaired keep track of resources
 - [x] Player is sent to jail
 - [x] Card event: Pay/receive money from bank
 - [x] Card event: Move to different square
-- [ ] Player can leave jail (using pay $50, roll 3x or using get-out-of-jail card)
-- [ ] Player is charged rent for streets if player owns all streets
+- [x] Card event: get out of jail card
+- [x] Player can leave jail (using pay $50, or using get-out-of-jail card)
+- [x] Cards shuffled at start of the game
 - [ ] Player is charged rent for water/electricity
-- [ ] Player is charged rent for stations
-- [ ] Player can choose to auction street (if applicable)
-- [ ] Card event: get out of jail card
-- [ ] Card event: make repairs on houses/hotels
-- [ ] Card event: pay players money for birthday
+- [ ] Player is charged rent for streets if player owns all streets
+- [ ] Player is charged rent for multiple stations 
 - [ ] Player can buy house (calculates applicable streets)
 - [ ] Player is charged rent for streets for x number of houses
+- [ ] Player can choose to auction street (if applicable)
+- [ ] Card event: make repairs on houses/hotels
+- [ ] Card event: pay players money for birthday
 - [ ] Player can buy hotel (calculates applicable streets)
 - [ ] Player is charged rent for streets for hotel
 - [ ] Player can morgtage street
 - [ ] Player can unmortgage street
-- [ ] Cards shuffled at start of the game

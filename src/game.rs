@@ -1,5 +1,5 @@
 use rand::thread_rng;
-use rand::Rng;
+use rand::seq::SliceRandom;
 
 use std::collections::HashMap;
 use std::io;
@@ -53,40 +53,40 @@ static SQUARES: [Square; BOARD_SIZE as usize] = [
 
 enum CardAction {
     Movement,
-    Movement_Relative, // move relative to starting square
+    MovementRelative, // move relative to starting square
     Payment,
-    Payment_Dice, // payment calculated based on dice roll
-    Payment_Players, // payment calculated based on dice roll
+    PaymentDice, // payment calculated based on dice roll
+    PaymentPlayers, // payment calculated based on dice roll
     Jail, 
-    Jail_Release, 
+    JailRelease, 
     Unknown
     // TODO: add other actions
 }
 
-static CHANCE_CARDS: [Card; 16 as usize] = [
+const CHANCE_CARDS: [Card; 16 as usize] = [
         Card::new("GO TO JAIL!", CardAction::Jail, None, None),
         Card::new("Advance to St. Charles Place", CardAction::Movement, None, Some(11)),
-        Card::new("Make general repairs on all your property. House, $25 each; Hotel, $100 each", CardAction::Payment_Dice, Some(25), None), // TODO: calculate amount
+        Card::new("Make general repairs on all your property. House, $25 each; Hotel, $100 each", CardAction::PaymentDice, Some(25), None), // TODO: calculate amount
         Card::new("Advance to the next railroad. If unowned, you can buy it. if owned, pay twice the rent", CardAction::Unknown, None, None), // TODO: calculate amount
-        Card::new("You have been elected chairman of the board. Pay each player $50", CardAction::Payment_Players, Some(50), None), // TODO: calculate amount
+        Card::new("You have been elected chairman of the board. Pay each player $50", CardAction::PaymentPlayers, Some(50), None), // TODO: calculate amount
         Card::new("Take a trip to Reading Railroad.", CardAction::Movement, None, Some(5)),
         Card::new("Speeding fine. Pay $15", CardAction::Payment, Some(15), None),
         Card::new("Your building load matures. Receive $150", CardAction::Payment, Some(-150), None),
         Card::new("Advance to Boardwalk", CardAction::Movement, None, Some(39)),
-        Card::new("Go back three spaces", CardAction::Movement_Relative, None, Some(-3)), // TODO: move relative to current square
+        Card::new("Go back three spaces", CardAction::MovementRelative, None, Some(-3)), // TODO: move relative to current square
         Card::new("Advance to Illinois Avenue", CardAction::Movement, None, Some(24)),
         Card::new("Advance to GO. Collect $200", CardAction::Movement, None, Some(0)),
-        Card::new("GET OUT OF JAIL FREE.", CardAction::Jail_Release, None, None),
+        Card::new("GET OUT OF JAIL FREE.", CardAction::JailRelease, None, None),
         Card::new("Take all $100 bills from the Bank and throw them in the air", CardAction::Unknown, None, None), // TODO: how to model this? Random allocation?
         Card::new("Advance to the nearest railroad. If unowned, you can buy it. If owned, pay twice the rent", CardAction::Unknown, None, None), // TODO: go to closest 5,15,25,35. 2x amount
         Card::new("Advance to the nearest utility. If unowned, you can buy it. If owned, roll the dice, and pay the owner 10x the roll", CardAction::Unknown, None, None), // TODO: pay relative to roll
 ];
-static COMMUNITY_CHEST_CARDS: [Card; 16 as usize] = [
+const COMMUNITY_CARDS: [Card; 16 as usize] = [
         Card::new("You are assessed for Street repairs: $40 per House, $115 per Hotel", CardAction::Payment, Some(0), None),
-        Card::new("GET OUT OF JAIL FREE.", CardAction::Jail_Release, None, None),
+        Card::new("GET OUT OF JAIL FREE.", CardAction::JailRelease, None, None),
         Card::new("You have won second prize in a beauty contest. Collect $10", CardAction::Payment, Some(-10), None),
         Card::new("Life insurance matures. Collect $100", CardAction::Payment, Some(-100), None),
-        Card::new("It's your birthday. Collect $10 for each player", CardAction::Payment_Players, Some(-10), None), // TODO: calculate amount
+        Card::new("It's your birthday. Collect $10 for each player", CardAction::PaymentPlayers, Some(-10), None), // TODO: calculate amount
         Card::new("Advance to GO. Collect $200", CardAction::Movement, None, Some(0)),
         Card::new("You inherit $100", CardAction::Payment, Some(-100), None),
         Card::new("Bank error in your favor. Collect $200", CardAction::Payment, Some(-200), None),
@@ -118,6 +118,8 @@ struct Card {
 pub struct Game {
     players: Vec<RefCell<Player>>,
     active_player: Cell<usize>, // index of active player in the players vec
+    chance_cards: RefCell<Vec<usize>>, // references to cards in CHANCE_CARDS
+    community_cards: RefCell<Vec<usize>> // references to cards in COMMUNITY_CARDS
 }
 
 #[derive(PartialEq, Eq, Hash, Debug)]
@@ -216,7 +218,7 @@ impl Game {
             CardAction::Jail => {
                 player.go_to_jail();
             },
-            CardAction::Jail_Release => {
+            CardAction::JailRelease => {
                 player.num_get_out_of_jail_cards += 1
             },
             _ => {
@@ -230,10 +232,12 @@ impl Game {
         if !player.is_in_jail {
             return;
         }
-        if player.num_get_out_of_jail_cards > 0{
+        if player.num_get_out_of_jail_cards > 0 {
+            println!("Yay, No More Jail, thanks to your get-out-of-jail-free card");
             player.num_get_out_of_jail_cards -= 1;
             player.is_in_jail = false;
         } else if player.cash >= 50 {
+            println!("Yay, No More Jail, since you bribed the guards $50");
             player.transact_cash(-50);
             player.is_in_jail = false;
         }
@@ -271,19 +275,24 @@ impl Game {
             30 => {
                 player.go_to_jail();
             },
-            2 | 17 | 33 => {
-                println!("Community Chest");
-                let mut rng = thread_rng();
-                let r = rng.gen_range(0,16);
-                let card = COMMUNITY_CHEST_CARDS.get(r).expect("card expected");
-                self.execute_card(player, &card);
-            },
-            7 | 22 | 36 => {
-                println!("Chance");
-                let mut rng = thread_rng();
-                let r = rng.gen_range(0,16);
-                let card = CHANCE_CARDS.get(r).expect("card expected");
-                self.execute_card(player, &card);
+            // cards
+            2 | 17 | 33 | 7 | 22 | 36 => {
+                let (mut cards, ref_deck) = match player.position {
+                    2 | 17 | 33 => {
+                        print!("COMMUNITY CHEST: ");
+                        let mut cards = self.community_cards.borrow_mut();
+                        (cards, &COMMUNITY_CARDS)
+                    },
+                    _ => {
+                        print!("CHANCE: ");
+                        let mut cards = self.chance_cards.borrow_mut();
+                        (cards, &COMMUNITY_CARDS)
+                    }
+                };
+                let idx = cards.remove(0);
+                let card = ref_deck.get(idx).expect("Card should exist");
+                self.execute_card(player, card);
+                cards.push(idx);
             },
             _ => {
                 println!("You landed on {}", square.name);
@@ -445,6 +454,15 @@ fn capture_dice_roll() -> i32 {
     }
 }
 
+/// Shuffle the deck of chance or community chest cards
+fn shuffle_cards(static_cards: &[Card; 16]) -> Vec::<usize> {
+    // shuffle the indexes
+    let mut idxs: Vec<usize> = (0..static_cards.len()).collect();
+    idxs.shuffle(&mut thread_rng());
+    //println!("{:?}", idxs);
+    idxs
+}
+
 /// Initialize the game
 // Initializes the game by setting up the necessary data structures.
 pub fn init(player_names: Vec::<String>) -> Game {
@@ -456,9 +474,16 @@ pub fn init(player_names: Vec::<String>) -> Game {
 
     // create players from String
     let asset_register = HashMap::<&Square, Asset>::new();
+
+    // Deal with cards
+    let chance_cards = RefCell::new(shuffle_cards(&CHANCE_CARDS));
+    let community_cards = RefCell::new(shuffle_cards(&COMMUNITY_CARDS));
+
     Game {
         active_player: Cell::new(0),
-        players
+        players,
+        chance_cards,
+        community_cards,
     }
 }
 

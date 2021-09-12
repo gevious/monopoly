@@ -74,30 +74,30 @@ enum SquareType {
     Utility
 }
 
-const CHANCE_CARDS: [Card; 16 as usize] = [
+const CHANCE_CARDS: [Card; 10 as usize] = [
         Card::new("GO TO JAIL!", CardAction::Jail, None, None),
         Card::new("Advance to St. Charles Place", CardAction::Movement, None, Some(11)),
-        Card::new("Make general repairs on all your property. House, $25 each; Hotel, $100 each", CardAction::PaymentDice, Some(25), None), // TODO: calculate amount
-        Card::new("Advance to the next railroad. If unowned, you can buy it. if owned, pay twice the rent", CardAction::Unknown, None, None), // TODO: calculate amount
-        Card::new("You have been elected chairman of the board. Pay each player $50", CardAction::PaymentPlayers, Some(50), None), // TODO: calculate amount
+//        Card::new("Make general repairs on all your property. House, $25 each; Hotel, $100 each", CardAction::PaymentDice, Some(25), None), // TODO: calculate amount
+ //       Card::new("Advance to the next railroad. If unowned, you can buy it. if owned, pay twice the rent", CardAction::Unknown, None, None), // TODO: calculate amount
+        Card::new("You have been elected chairman of the board. Pay $50", CardAction::PaymentPlayers, Some(50), None), // TODO: calculate amount to charge 'each player'
         Card::new("Take a trip to Reading Railroad.", CardAction::Movement, None, Some(5)),
         Card::new("Speeding fine. Pay $15", CardAction::Payment, Some(15), None),
         Card::new("Your building load matures. Receive $150", CardAction::Payment, Some(-150), None),
         Card::new("Advance to Boardwalk", CardAction::Movement, None, Some(39)),
-        Card::new("Go back three spaces", CardAction::MovementRelative, None, Some(-3)), // TODO: move relative to current square
+//        Card::new("Go back three spaces", CardAction::MovementRelative, None, Some(-3)), // TODO: move relative to current square
         Card::new("Advance to Illinois Avenue", CardAction::Movement, None, Some(24)),
         Card::new("Advance to GO. Collect $200", CardAction::Movement, None, Some(0)),
         Card::new("GET OUT OF JAIL FREE.", CardAction::JailRelease, None, None),
-        Card::new("Take all $100 bills from the Bank and throw them in the air", CardAction::Unknown, None, None), // TODO: how to model this? Random allocation?
-        Card::new("Advance to the nearest railroad. If unowned, you can buy it. If owned, pay twice the rent", CardAction::Unknown, None, None), // TODO: go to closest 5,15,25,35. 2x amount
-        Card::new("Advance to the nearest utility. If unowned, you can buy it. If owned, roll the dice, and pay the owner 10x the roll", CardAction::Unknown, None, None), // TODO: pay relative to roll
+ //       Card::new("Take all $100 bills from the Bank and throw them in the air", CardAction::Unknown, None, None), // TODO: how to model this? Random allocation?
+//        Card::new("Advance to the nearest railroad. If unowned, you can buy it. If owned, pay twice the rent", CardAction::Unknown, None, None), // TODO: go to closest 5,15,25,35. 2x amount
+//        Card::new("Advance to the nearest utility. If unowned, you can buy it. If owned, roll the dice, and pay the owner 10x the roll", CardAction::Unknown, None, None), // TODO: pay relative to roll
 ];
-const COMMUNITY_CARDS: [Card; 16 as usize] = [
-        Card::new("You are assessed for Street repairs: $40 per House, $115 per Hotel", CardAction::Payment, Some(0), None),
+const COMMUNITY_CARDS: [Card; 15 as usize] = [
+//        Card::new("You are assessed for Street repairs: $40 per House, $115 per Hotel", CardAction::Payment, Some(0), None),
         Card::new("GET OUT OF JAIL FREE.", CardAction::JailRelease, None, None),
         Card::new("You have won second prize in a beauty contest. Collect $10", CardAction::Payment, Some(-10), None),
         Card::new("Life insurance matures. Collect $100", CardAction::Payment, Some(-100), None),
-        Card::new("It's your birthday. Collect $10 for each player", CardAction::PaymentPlayers, Some(-10), None), // TODO: calculate amount
+        Card::new("It's your birthday. Collect $40", CardAction::PaymentPlayers, Some(-40), None),
         Card::new("Advance to GO. Collect $200", CardAction::Movement, None, Some(0)),
         Card::new("You inherit $100", CardAction::Payment, Some(-100), None),
         Card::new("Bank error in your favor. Collect $200", CardAction::Payment, Some(-200), None),
@@ -478,9 +478,9 @@ fn capture_dice_roll() -> i32 {
 }
 
 /// Shuffle the deck of chance or community chest cards
-fn shuffle_cards(static_cards: &[Card; 16]) -> Vec::<usize> {
+fn shuffle_cards(card_num: usize) -> Vec::<usize> {
     // shuffle the indexes
-    let mut idxs: Vec<usize> = (0..static_cards.len()).collect();
+    let mut idxs: Vec<usize> = (0..card_num).collect();
     idxs.shuffle(&mut thread_rng());
     //println!("{:?}", idxs);
     idxs
@@ -499,8 +499,8 @@ pub fn init(player_names: Vec::<String>) -> Game {
     let asset_register = HashMap::<&Square, Asset>::new();
 
     // Deal with cards
-    let chance_cards = RefCell::new(shuffle_cards(&CHANCE_CARDS));
-    let community_cards = RefCell::new(shuffle_cards(&COMMUNITY_CARDS));
+    let chance_cards = RefCell::new(shuffle_cards(CHANCE_CARDS.len()));
+    let community_cards = RefCell::new(shuffle_cards(COMMUNITY_CARDS.len()));
 
     Game {
         active_player: Cell::new(0),

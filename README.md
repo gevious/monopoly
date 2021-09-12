@@ -14,16 +14,15 @@ Monopoly clone, to help visually impaired keep track of resources
 - [x] Player can choose to buy street (if applicable)
 - [x] Player is charged rent for basic streets
 - [x] Player is sent to jail
-- [ ] Player can choose to auction street (if applicable)
-- [ ] Player is charged rent for streets if player owns all streets
-- [ ] Player is charged rent for stations
-- [ ] Player is charged rent for water/electricity
+- [x] Card event: Pay/receive money from bank
+- [x] Card event: Move to different square
 - [ ] Player can leave jail (using pay $50, roll 3x or using get-out-of-jail card)
-- [ ] Community chest cards shuffled at start of the game
-- [ ] Chance cards shuffled at start of the game
-- [ ] Card event: Pay/receive money from bank
-- [ ] Card event: make repairs on houses/hotels
+- [ ] Player is charged rent for streets if player owns all streets
+- [ ] Player is charged rent for water/electricity
+- [ ] Player is charged rent for stations
+- [ ] Player can choose to auction street (if applicable)
 - [ ] Card event: get out of jail card
+- [ ] Card event: make repairs on houses/hotels
 - [ ] Card event: pay players money for birthday
 - [ ] Player can buy house (calculates applicable streets)
 - [ ] Player is charged rent for streets for x number of houses
@@ -31,3 +30,4 @@ Monopoly clone, to help visually impaired keep track of resources
 - [ ] Player is charged rent for streets for hotel
 - [ ] Player can morgtage street
 - [ ] Player can unmortgage street
+- [ ] Cards shuffled at start of the game

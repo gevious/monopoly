@@ -427,6 +427,7 @@ impl Player {
     /// Go to jail
     // Player doesn't collect 200, and goes straight to jail
     pub fn go_to_jail(&mut self) {
+        println!("GO TO JAIL!");
         self.is_in_jail = true;
         self.position = 10;
     }

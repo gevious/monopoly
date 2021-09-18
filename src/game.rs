@@ -8,47 +8,70 @@ use std::fmt;
 use std::cell::{Cell, RefCell};
 
 const BOARD_SIZE: i32 = 40; // 40 squares on the board
+// Change to a const, to avoid concurrency issues when running tests
 static SQUARES: [Square; BOARD_SIZE as usize] = [
-    Square::new("Just chillin' at the start", SquareType::Corner, None, None),
-    Square::new("Mediterranean Avenue", SquareType::Street, Some(60), Some(2)),
-    Square::new("Community Chest", SquareType::CommunityCard, None, None),
-    Square::new("Baltic Avenue", SquareType::Street, Some(60), Some(4)),
-    Square::new("Income Tax", SquareType::Tax, None, None),
-    Square::new("Reading Railroad", SquareType::Station, Some(200), Some(25)),
-    Square::new("Oriental Avenue", SquareType::Street, Some(100), Some(6)),
-    Square::new("Chance", SquareType::ChanceCard, None, None),
-    Square::new("Vermont Avenue", SquareType::Street, Some(100), Some(6)),
-    Square::new("Connecticut Avenue", SquareType::Street, Some(120), Some(8)),
-    Square::new("Visiting Jail", SquareType::Corner, None, None),
-    Square::new("St. Charles Place", SquareType::Street, Some(140), Some(10)),
-    Square::new("Electric Company", SquareType::Utility, Some(150), None),
-    Square::new("States Avenue", SquareType::Street, Some(140), Some(10)),
-    Square::new("Virginia Avenue", SquareType::Street, Some(160), Some(12)),
-    Square::new("Pennsylvania Railroad", SquareType::Station, Some(200), Some(25)),
-    Square::new("St. James Place", SquareType::Street, Some(180), Some(14)),
-    Square::new("Community Chest", SquareType::CommunityCard, None, None),
-    Square::new("Tennessee Avenue", SquareType::Street, Some(180), Some(14)),
-    Square::new("New York Avenue", SquareType::Street, Some(200), Some(16)),
-    Square::new("Yay! Free Parking", SquareType::Corner, None, None),
-    Square::new("Kentucky Avenue", SquareType::Street, Some(220), Some(18)),
-    Square::new("Chance", SquareType::ChanceCard, None, None),
-    Square::new("Indiana Avenue", SquareType::Street, Some(220), Some(18)),
-    Square::new("Illinois Avenue", SquareType::Street, Some(240), Some(20)),
-    Square::new("B. & O. Railroad", SquareType::Station, Some(200), Some(25)),
-    Square::new("Atlantic Avenue", SquareType::Street, Some(260), Some(22)),
-    Square::new("Ventnor Avenue", SquareType::Street, Some(260), Some(22)),
-    Square::new("Water Works", SquareType::Utility, Some(150), None),
-    Square::new("Marvin Gardens", SquareType::Street, Some(280), Some(24)),
-    Square::new("Go To Jail", SquareType::Corner, None, None),
-    Square::new("Pacific Avenue", SquareType::Street, Some(300), Some(26)),
-    Square::new("North Carolina Avenue", SquareType::Street, Some(300), Some(26)),
-    Square::new("Community Chest", SquareType::CommunityCard, None, None),
-    Square::new("Pennsylvania Avenue", SquareType::Street, Some(320), Some(28)),
-    Square::new("Short Line", SquareType::Station, Some(200), Some(25)),
-    Square::new("Chance", SquareType::ChanceCard, None, None),
-    Square::new("Park Place", SquareType::Street, Some(350), Some(35)),
-    Square::new("Luxury Tax", SquareType::Tax, None, None),
-    Square::new("Boardwalk", SquareType::Street, Some(400), Some(50)),
+    Square::new("Just chillin' at the start", SquareType::Corner, None),
+    Square::new("Mediterranean Avenue", SquareType::Street, 
+        Some(StreetDetails::new('A', 60, 2, 4))),
+    Square::new("Community Chest", SquareType::CommunityCard, None),
+    Square::new("Baltic Avenue", SquareType::Street, 
+        Some(StreetDetails::new('A', 60, 4, 8))),
+    Square::new("Income Tax", SquareType::Tax, None),
+    Square::new("Reading Railroad", SquareType::Station, None),
+    Square::new("Oriental Avenue", SquareType::Street, 
+        Some(StreetDetails::new('B', 100, 6, 12))),
+    Square::new("Chance", SquareType::ChanceCard, None),
+    Square::new("Vermont Avenue", SquareType::Street, 
+        Some(StreetDetails::new('B', 100, 6, 12))),
+    Square::new("Connecticut Avenue", SquareType::Street, 
+        Some(StreetDetails::new('B', 120, 8, 16))),
+    Square::new("Visiting Jail", SquareType::Corner, None),
+    Square::new("St. Charles Place", SquareType::Street, 
+        Some(StreetDetails::new('C', 140, 10, 20))),
+    Square::new("Electric Company", SquareType::Utility, None),
+    Square::new("States Avenue", SquareType::Street, 
+        Some(StreetDetails::new('C', 140, 10, 20))),
+    Square::new("Virginia Avenue", SquareType::Street, 
+        Some(StreetDetails::new('C', 160, 12, 24))),
+    Square::new("Pennsylvania Railroad", SquareType::Station, None),
+    Square::new("St. James Place", SquareType::Street, 
+        Some(StreetDetails::new('D', 180, 14, 28))),
+    Square::new("Community Chest", SquareType::CommunityCard, None),
+    Square::new("Tennessee Avenue", SquareType::Street, 
+        Some(StreetDetails::new('D', 180, 14, 28))),
+    Square::new("New York Avenue", SquareType::Street, 
+        Some(StreetDetails::new('D', 200, 16, 32))),
+    Square::new("Yay! Free Parking", SquareType::Corner, None),
+    Square::new("Kentucky Avenue", SquareType::Street, 
+        Some(StreetDetails::new('E', 220, 18, 36))),
+    Square::new("Chance", SquareType::ChanceCard, None),
+    Square::new("Indiana Avenue", SquareType::Street, 
+        Some(StreetDetails::new('E', 220, 18, 36))),
+    Square::new("Illinois Avenue", SquareType::Street, 
+        Some(StreetDetails::new('E', 240, 20, 40))),
+    Square::new("B. & O. Railroad", SquareType::Station, None),
+    Square::new("Atlantic Avenue", SquareType::Street, 
+        Some(StreetDetails::new('F', 260, 22, 44))),
+    Square::new("Ventnor Avenue", SquareType::Street, 
+        Some(StreetDetails::new('F', 260, 22, 44))),
+    Square::new("Water Works", SquareType::Utility, None),
+    Square::new("Marvin Gardens", SquareType::Street, 
+        Some(StreetDetails::new('F', 280, 24, 48))),
+    Square::new("Go To Jail", SquareType::Corner, None),
+    Square::new("Pacific Avenue", SquareType::Street, 
+        Some(StreetDetails::new('G', 300, 26, 52))),
+    Square::new("North Carolina Avenue", SquareType::Street, 
+        Some(StreetDetails::new('G', 300, 26, 52))),
+    Square::new("Community Chest", SquareType::CommunityCard, None),
+    Square::new("Pennsylvania Avenue", SquareType::Street, 
+        Some(StreetDetails::new('G', 320, 28, 56))),
+    Square::new("Short Line", SquareType::Station, None),
+    Square::new("Chance", SquareType::ChanceCard, None),
+    Square::new("Park Place", SquareType::Street, 
+        Some(StreetDetails::new('H', 350, 35, 70))),
+    Square::new("Luxury Tax", SquareType::Tax, None),
+    Square::new("Boardwalk", SquareType::Street, 
+        Some(StreetDetails::new('H', 400, 50, 100)))
 ];
 
 enum CardAction {
@@ -92,21 +115,21 @@ const CHANCE_CARDS: [Card; 10 as usize] = [
 //        Card::new("Advance to the nearest railroad. If unowned, you can buy it. If owned, pay twice the rent", CardAction::Unknown, None, None), // TODO: go to closest 5,15,25,35. 2x amount
 //        Card::new("Advance to the nearest utility. If unowned, you can buy it. If owned, roll the dice, and pay the owner 10x the roll", CardAction::Unknown, None, None), // TODO: pay relative to roll
 ];
-const COMMUNITY_CARDS: [Card; 15 as usize] = [
+const COMMUNITY_CARDS: [Card; 10 as usize] = [
 //        Card::new("You are assessed for Street repairs: $40 per House, $115 per Hotel", CardAction::Payment, Some(0), None),
         Card::new("GET OUT OF JAIL FREE.", CardAction::JailRelease, None, None),
         Card::new("You have won second prize in a beauty contest. Collect $10", CardAction::Payment, Some(-10), None),
-        Card::new("Life insurance matures. Collect $100", CardAction::Payment, Some(-100), None),
-        Card::new("It's your birthday. Collect $40", CardAction::PaymentPlayers, Some(-40), None),
+//        Card::new("Life insurance matures. Collect $100", CardAction::Payment, Some(-100), None),
+ //       Card::new("It's your birthday. Collect $40", CardAction::PaymentPlayers, Some(-40), None),
         Card::new("Advance to GO. Collect $200", CardAction::Movement, None, Some(0)),
         Card::new("You inherit $100", CardAction::Payment, Some(-100), None),
-        Card::new("Bank error in your favor. Collect $200", CardAction::Payment, Some(-200), None),
+//        Card::new("Bank error in your favor. Collect $200", CardAction::Payment, Some(-200), None),
         Card::new("From sale of stock, you get $50", CardAction::Payment, Some(-50), None),
         Card::new("Collect $25 consultancy fee", CardAction::Payment, Some(-25), None),
-        Card::new("Holiday fund matures. Collect $100", CardAction::Payment, Some(-100), None),
+ //       Card::new("Holiday fund matures. Collect $100", CardAction::Payment, Some(-100), None),
         Card::new("Doctor's fees. Pay $50", CardAction::Payment, Some(50), None),
         Card::new("Hospital fees. Pay $100", CardAction::Payment, Some(100), None),
-        Card::new("GO TO JAIL!", CardAction::Jail, None, None),
+//        Card::new("GO TO JAIL!", CardAction::Jail, None, None),
         Card::new("School fees. Pay $50", CardAction::Payment, Some(50), None),
         Card::new("Income tax refund. Collect $20", CardAction::Payment, Some(-20), None)
 ];
@@ -143,12 +166,12 @@ pub struct Player {
     num_get_out_of_jail_cards: i32,
 }
 
-pub struct Square {
-    name: &'static str,
-    square_type: SquareType,
-    price: Option<i32>,
-    rent: Option<i32>,
-    asset: Asset
+#[derive(Clone, Copy)]
+struct StreetDetails {
+    group: char, // street group. No strong type, because it never changes
+    price: i32,
+    rent: i32,
+    rent_group: i32
     
 //    rent_full_street: i32,
 //    rent_1house: i32,
@@ -158,6 +181,13 @@ pub struct Square {
 //    rent_hotel: i32,
 //    mortgage_cost: i32,
 //    mortgage_redeem: i32,
+}
+
+pub struct Square {
+    name: &'static str,
+    square_type: SquareType,
+    street_details: Option<StreetDetails>,
+    asset: Asset
 }
 
 unsafe impl Sync for Square {}
@@ -303,7 +333,7 @@ impl Game {
                     _ => {
                         print!("CHANCE: ");
                         let mut cards = self.chance_cards.borrow_mut();
-                        (cards, &COMMUNITY_CARDS)
+                        (cards, &CHANCE_CARDS)
                     }
                 };
                 let idx = cards.remove(0);
@@ -316,7 +346,7 @@ impl Game {
                 match square.calculate_rent(dice_roll) {
                     None => {
                         // No owner, therefore no rent
-                        let price = square.price.expect("Price of street should exist");
+                        let price = square.get_price();
                         println!("You buy it for ${}", price);
                         if player.cash > price {
                             player.transact_cash(-1 * price);
@@ -344,27 +374,52 @@ impl Game {
     }
 }
 
-impl Square {
-    const fn new(name: &'static str, square_type: SquareType, price: Option<i32>, rent: Option<i32>) -> Self {
+impl StreetDetails {
+    const fn new(group: char, price: i32, rent: i32, rent_group: i32) -> Self {
         Self {
-            name,
+            group,
             price,
             rent,
+            rent_group
+        }
+    }
+}
+
+impl Square {
+
+    const fn new(name: &'static str, square_type: SquareType, street_details: Option<StreetDetails>) -> Self {
+        let details = match street_details {
+            None => None,
+            Some(details) => Some(details)
+        };
+        Self {
+            name,
             square_type,
+            street_details: details,
             asset: Asset::new()
+        }
+    }
+
+
+    /// Get purchase price of the street
+    pub fn get_price(&self) -> i32 {
+        match self.square_type {
+            SquareType::Station => 200,
+            SquareType::Utility => 150,
+            SquareType::Street  => self.street_details.expect("Details should exist").price,
+                _ => 0 // Error, should never happen
         }
     }
 
     /// Get all squares owned by a player
     fn get_player_owned_squares(player_idx: usize) -> Vec<Square> {
-        // TODO: get asset info as well
         let mut squares = Vec::<Square>::new();
         for s in SQUARES.iter() {
             match s.asset.owner.get() {
                 Some(owner_idx) => {
                     if owner_idx == player_idx {
                         squares.push(
-                            Square::new(s.name, s.square_type, s.price, s.rent));
+                            Square::new(s.name, s.square_type, s.street_details));
                     }
                 },
                 None => {}
@@ -390,7 +445,6 @@ impl Square {
         let rent = match self.square_type {
             SquareType::Utility => {
                 let owned_squares = Square::get_player_owned_squares(owner);
-                println!("Owned squares: {:?}", owned_squares.len());
                 let utility_num = owned_squares.iter()
                     .filter(|&x| x.square_type == SquareType::Utility)
                     .collect::<Vec<&Square>>().len();
@@ -409,9 +463,9 @@ impl Square {
                     .collect::<Vec<&Square>>().len();
                 let station_num = station_num as i32;
 
-                let r = self.rent.expect("Rent should exist");
                 match station_num {
-                    1 | 2 => r * station_num,
+                    1 => 25,
+                    2 => 50,
                     3 => 100, // $100 for 3 stations
                     4 => 200,  // $200 for 4 stations
                     _ => 0 // Error, no rent 
@@ -419,8 +473,32 @@ impl Square {
             },
             SquareType::Street => {
                 let owned_squares = Square::get_player_owned_squares(owner);
-                // TODO: Get streets in set of current streets
-                self.rent.expect("Rent should exist")
+                let street_details = self.street_details.expect("Details expected");
+                let street_group = street_details.group;
+                let group_total = SQUARES.iter()
+                    .filter(|&x| { 
+                        match x.street_details {
+                            None => false,
+                            Some(d) => d.group == street_group
+                        }})
+                    .collect::<Vec<&Square>>().len();
+                let group_owned = owned_squares.iter()
+                    .filter(|&x| { 
+                        match x.street_details {
+                            None => false,
+                            Some(d) => d.group == street_group
+                        }})
+                    .collect::<Vec<&Square>>().len();
+
+                // println!("Street: {}", self.name);
+                // println!("group: {}", street_group);
+                // println!("group owned: {}", group_owned);
+                // println!("group total: {}", group_total);
+
+                match group_total == group_owned {
+                    true => street_details.rent_group,
+                    false => street_details.rent
+                }
             }
             _ => 0
         };
@@ -679,11 +757,11 @@ mod tests {
     }
 
 
-//    #[test]
+    #[test]
     fn calculate_rent_street() {
-
-        let g = init(vec!["TestOwner".to_string(), "TestRenter".to_string()]);
+        let g = init(vec!["StreetOwner".to_string(), "StreetRenter".to_string()]);
         let s = SQUARES.get(3).unwrap();
+        println!(" --- {} : {:?}", s.name, s.asset.owner);
         assert_eq!(s.asset.owner.get(), None);
 
         // Buy the following squares:
@@ -741,7 +819,6 @@ mod tests {
     #[test]
     fn calculate_rent_utility() {
         // Buy 1 utility, then buy the second
-
         let g = init(vec!["TestOwner".to_string(), "TestRenter".to_string()]);
 
         { // scope the `mut p` reference, so we release it after this 'turn'
@@ -767,7 +844,7 @@ mod tests {
     #[test]
     fn calculate_rent_station() {
         // Buy stations one at a time
-        let g = init(vec!["TestOwner".to_string(), "TestRenter".to_string()]);
+        let g = init(vec!["StationOwner".to_string(), "StationRenter".to_string()]);
 
         { // scope the `mut p` reference, so we release it after this 'turn'
             let mut p = g.players.get(g.active_player.get()).unwrap().borrow_mut();
@@ -778,7 +855,6 @@ mod tests {
         let r = s.calculate_rent(3);
         assert_eq!(r, Some(25)); 
 
-        println!("HERE");
         g.active_player.set(0 as usize); // update active player to renter
         { // scope the `mut p` reference, so we release it after this 'turn'
             let mut p = g.players.get(g.active_player.get()).unwrap().borrow_mut();
@@ -832,4 +908,29 @@ mod tests {
         assert_eq!(g.players.get(0).unwrap().borrow().cash, 1444);
         assert_eq!(g.players.get(1).unwrap().borrow().cash, 1496);
     }
+
+    #[test]
+    fn buy_property() {
+        let g = init(vec!["Mongul".to_string()]);
+        let s = SQUARES.get(3).unwrap();
+        assert_eq!(s.asset.owner.get(), None);
+
+        { // scope the `mut p` reference, so we release it after this 'turn'
+            let mut p = g.players.get(g.active_player.get()).unwrap().borrow_mut();
+            assert_eq!(p.cash, 1500);
+            
+            g.execute_turn(&mut p, 3); // Mongul moves to Baltic Avenue
+            assert_eq!(p.cash, 1440); // bought street
+            assert_eq!(s.asset.owner.get().unwrap(), g.active_player.get());
+
+            g.execute_turn(&mut p, 9); // Mongul moves to Electric Company
+            assert_eq!(p.cash, 1290); // bought street
+            assert_eq!(s.asset.owner.get().unwrap(), g.active_player.get());
+
+            g.execute_turn(&mut p, 3); // Mongul moves to Pennsylvania Railroad
+            assert_eq!(p.cash, 1090); // bought street
+            assert_eq!(s.asset.owner.get().unwrap(), g.active_player.get());
+        }
+    }
+
 }

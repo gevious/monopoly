@@ -20,9 +20,9 @@ Monopoly clone, to help visually impaired keep track of resources
 - [x] Player can leave jail (using pay $50, or using get-out-of-jail card)
 - [x] Cards shuffled at start of the game
 - [x] Player is charged rent for water/electricity
-- [ ] Player can choose to auction street (if applicable)
+- [x] Player is charged rent for multiple stations 
 - [ ] Player is charged rent for streets if player owns all streets
-- [ ] Player is charged rent for multiple stations 
+- [ ] Player can choose to auction street (if applicable)
 - [ ] Player can buy house (calculates applicable streets)
 - [ ] Player is charged rent for streets for x number of houses
 - [ ] Card event: make repairs on houses/hotels

@@ -44,7 +44,7 @@ static SQUARES: [Square; BOARD_SIZE as usize] = [
     Square::new("North Carolina Avenue", SquareType::Street, Some(300), Some(26)),
     Square::new("Community Chest", SquareType::CommunityCard, None, None),
     Square::new("Pennsylvania Avenue", SquareType::Street, Some(320), Some(28)),
-    Square::new("Short Line", SquareType::Street, Some(200), Some(25)),
+    Square::new("Short Line", SquareType::Station, Some(200), Some(25)),
     Square::new("Chance", SquareType::ChanceCard, None, None),
     Square::new("Park Place", SquareType::Street, Some(350), Some(35)),
     Square::new("Luxury Tax", SquareType::Tax, None, None),
@@ -63,7 +63,7 @@ enum CardAction {
     // TODO: add other actions
 }
 
-#[derive(Debug)]
+#[derive(Eq, PartialEq, Debug, Clone, Copy)]
 enum SquareType {
     ChanceCard,
     CommunityCard,
@@ -313,21 +313,9 @@ impl Game {
             },
             SquareType::Utility | SquareType::Station | SquareType::Street => {
                 println!("You landed on {}", square.name);
-                match square.asset.owner.get() {
-                    Some(owner_idx) => { // this street is owned by somebody
-                        // check if active player is the owner
-                        if owner_idx == self.active_player.get() {
-                            println!("Phew! Luckily it's yours");
-                            return;
-                        }
-
-                        let mut owner = self.players.get(owner_idx).unwrap().borrow_mut();
-                        let rent = square.calculate_rent(dice_roll);
-                        println!("Oh no! You pay ${} to {}", rent, owner.name);
-                        player.transact_cash(-1 * rent);
-                        owner.transact_cash(rent);
-                    },
+                match square.calculate_rent(dice_roll) {
                     None => {
+                        // No owner, therefore no rent
                         let price = square.price.expect("Price of street should exist");
                         println!("You buy it for ${}", price);
                         if player.cash > price {
@@ -337,6 +325,18 @@ impl Game {
                             println!("Not enough money. It stays on the market");
                             // TODO: Implement auction where bank-person inputs player and price
                         }
+                    }, 
+                    Some(rent) => {
+                        let owner_idx = square.asset.owner
+                            .get().expect("Somebody owns this street");
+                        if owner_idx == self.active_player.get() {
+                            println!("Phew! Luckily it's yours");
+                            return;
+                        }
+                        let mut owner = self.players.get(owner_idx).unwrap().borrow_mut();
+                        println!("Oh no! You pay ${} to {}", rent, owner.name);
+                        player.transact_cash(-1 * rent);
+                        owner.transact_cash(rent);
                     }
                 }
             }
@@ -355,23 +355,76 @@ impl Square {
         }
     }
 
-    /// Calculate rent
+    /// Get all squares owned by a player
+    fn get_player_owned_squares(player_idx: usize) -> Vec<Square> {
+        // TODO: get asset info as well
+        let mut squares = Vec::<Square>::new();
+        for s in SQUARES.iter() {
+            match s.asset.owner.get() {
+                Some(owner_idx) => {
+                    if owner_idx == player_idx {
+                        squares.push(
+                            Square::new(s.name, s.square_type, s.price, s.rent));
+                    }
+                },
+                None => {}
+            }
+        }
+        squares
+    }
+
+    /// Calculate rent. If the square is unowned, there is no rent
     // Calculate rent, taking into account if a player owns all streets, and the number of
     // properties on the street.
-    pub fn calculate_rent(&self, dice_roll: i32) -> i32 {
-        // TODO: check for owner owning street/stations, houses, hotels
-        match self.square_type {
+    pub fn calculate_rent(&self, dice_roll: i32) -> Option<i32> {
+        let owner = match self.asset.owner.get() {
+            None => {
+                // Nobody owns this square
+                return None;
+            },
+            Some(r) => r
+        };
+
+        // Need owner of this square
+        // get all squares owner owns of the same type
+        let rent = match self.square_type {
             SquareType::Utility => {
-                dice_roll * 4
+                let owned_squares = Square::get_player_owned_squares(owner);
+                println!("Owned squares: {:?}", owned_squares.len());
+                let utility_num = owned_squares.iter()
+                    .filter(|&x| x.square_type == SquareType::Utility)
+                    .collect::<Vec<&Square>>().len();
+                let utility_num = utility_num as i32;
+                match utility_num {
+                    1 => dice_roll * 4,
+                    2 => dice_roll * 10,
+                    _ => 0 // Error, no rent
+                }
             },
             SquareType::Station => {
-                self.rent.expect("Rent should exist")
+                // See how many stations user has
+                let owned_squares = Square::get_player_owned_squares(owner);
+                let station_num = owned_squares.iter()
+                    .filter(|&x| x.square_type == SquareType::Station)
+                    .collect::<Vec<&Square>>().len();
+                let station_num = station_num as i32;
+
+                let r = self.rent.expect("Rent should exist");
+                match station_num {
+                    1 | 2 => r * station_num,
+                    3 => 100, // $100 for 3 stations
+                    4 => 200,  // $200 for 4 stations
+                    _ => 0 // Error, no rent 
+                }
             },
             SquareType::Street => {
+                let owned_squares = Square::get_player_owned_squares(owner);
+                // TODO: Get streets in set of current streets
                 self.rent.expect("Rent should exist")
             }
             _ => 0
-        }
+        };
+        Some(rent)
     }
 }
 
@@ -608,26 +661,153 @@ mod tests {
     }
 
     #[test]
-    fn test_calculate_rent() {
-        // Baltic avenue
-        let s = SQUARES.get(3).unwrap();
+    fn calculate_rent_unowned() {
+        // Unowned square | No Rent
+        let s = SQUARES.get(1).unwrap();
         let r = s.calculate_rent(3);
-        assert_eq!(r, 4);
-
+        assert_eq!(r, None);
+        
+        // Income tax | No rent
+        let s = SQUARES.get(4).unwrap();
+        let r = s.calculate_rent(4);
+        assert_eq!(r, None);
+       
         // no-rent square
         let s = SQUARES.get(10).unwrap();
         let r = s.calculate_rent(10);
-        assert_eq!(r, 0);
+        assert_eq!(r, None);
+    }
 
-        // Income tax
-        let s = SQUARES.get(4).unwrap();
-        let r = s.calculate_rent(4);
-        assert_eq!(r, 0);
 
-        // Utility
-        let s = SQUARES.get(12).unwrap();
-        let r = s.calculate_rent(8);
-        assert_eq!(r, 32); // 4 * 8
+//    #[test]
+    fn calculate_rent_street() {
+
+        let g = init(vec!["TestOwner".to_string(), "TestRenter".to_string()]);
+        let s = SQUARES.get(3).unwrap();
+        assert_eq!(s.asset.owner.get(), None);
+
+        // Buy the following squares:
+        // Baltic Avenue[3] (1 of set of 2)
+        // Oriental[6] & Vermont Ave[8] (2 of set of 3)
+        // St. Charles place[11], States Ave[13], Virginia Ave[14] (3 of set of 3)
+        // Park Place[37] & Boardwalk[39] (2 of set of 2)
+        { // scope the `mut p` reference, so we release it after this 'turn'
+            let mut p = g.players.get(g.active_player.get()).unwrap().borrow_mut();
+            g.execute_turn(&mut p, 3); // Owner moves to Baltic Avenue
+            g.execute_turn(&mut p, 3); // Owner moves to Oriental Avenue
+            g.execute_turn(&mut p, 2); // Vermont Avenue
+            g.execute_turn(&mut p, 3); // St. Charles place
+            g.execute_turn(&mut p, 2); // States Ave
+            g.execute_turn(&mut p, 1); // Virginia Ave
+            g.execute_turn(&mut p, 23); // Park place
+            g.execute_turn(&mut p, 2); // Boardwalk
+        }
+
+        g.active_player.set(1 as usize); // update active player to renter
+
+        // Rent for 1 of 2 set 
+        let s = SQUARES.get(3).unwrap(); // Baltic
+        let r = s.calculate_rent(3);
+        assert_eq!(r, Some(4));
+
+        // Rent for 2 of 3 set 
+        let s = SQUARES.get(6).unwrap(); // Oriental
+        let r = s.calculate_rent(3);
+        assert_eq!(r, Some(6));
+        let s = SQUARES.get(8).unwrap(); // Vermont
+        let r = s.calculate_rent(3);
+        assert_eq!(r, Some(6));
+
+        // rent for 3 of 3 set 
+        let s = SQUARES.get(11).unwrap(); // St. Charles 
+        let r = s.calculate_rent(3);
+        assert_eq!(r, Some(20));
+        let s = SQUARES.get(13).unwrap(); // States Ave
+        let r = s.calculate_rent(3);
+        assert_eq!(r, Some(20));
+        let s = SQUARES.get(14).unwrap(); // Virginia Ave
+        let r = s.calculate_rent(3);
+        assert_eq!(r, Some(24));
+        
+        // rent for 2 of 2 set 
+        let s = SQUARES.get(37).unwrap(); // Park Ave
+        let r = s.calculate_rent(3);
+        assert_eq!(r, Some(70));
+        let s = SQUARES.get(39).unwrap(); // Boardwalk
+        let r = s.calculate_rent(3);
+        assert_eq!(r, Some(100));
+    }
+
+    #[test]
+    fn calculate_rent_utility() {
+        // Buy 1 utility, then buy the second
+
+        let g = init(vec!["TestOwner".to_string(), "TestRenter".to_string()]);
+
+        { // scope the `mut p` reference, so we release it after this 'turn'
+            let mut p = g.players.get(g.active_player.get()).unwrap().borrow_mut();
+            g.execute_turn(&mut p, 12); // Electric
+        }
+        g.active_player.set(1 as usize); // update active player to renter
+        let s = SQUARES.get(12).unwrap(); // Electric
+        let r = s.calculate_rent(3);
+        assert_eq!(r, Some(12)); 
+
+        g.active_player.set(0 as usize); // update active player to renter
+        { // scope the `mut p` reference, so we release it after this 'turn'
+            let mut p = g.players.get(g.active_player.get()).unwrap().borrow_mut();
+            g.execute_turn(&mut p, 16); // Water
+        }
+        g.active_player.set(1 as usize); // update active player to renter
+        let s = SQUARES.get(28).unwrap(); // Electric
+        let r = s.calculate_rent(3);
+        assert_eq!(r, Some(30)); 
+    }
+
+    #[test]
+    fn calculate_rent_station() {
+        // Buy stations one at a time
+        let g = init(vec!["TestOwner".to_string(), "TestRenter".to_string()]);
+
+        { // scope the `mut p` reference, so we release it after this 'turn'
+            let mut p = g.players.get(g.active_player.get()).unwrap().borrow_mut();
+            g.execute_turn(&mut p, 5); // Reading Railroad
+        }
+        g.active_player.set(1 as usize); // update active player to renter
+        let s = SQUARES.get(5).unwrap();
+        let r = s.calculate_rent(3);
+        assert_eq!(r, Some(25)); 
+
+        println!("HERE");
+        g.active_player.set(0 as usize); // update active player to renter
+        { // scope the `mut p` reference, so we release it after this 'turn'
+            let mut p = g.players.get(g.active_player.get()).unwrap().borrow_mut();
+            g.execute_turn(&mut p, 10); // Pennsylvania Railroad
+        }
+        g.active_player.set(1 as usize); // update active player to renter
+        let s = SQUARES.get(5).unwrap();
+        let r = s.calculate_rent(3);
+        assert_eq!(r, Some(50)); 
+
+        g.active_player.set(0 as usize); // update active player to renter
+        { // scope the `mut p` reference, so we release it after this 'turn'
+            let mut p = g.players.get(g.active_player.get()).unwrap().borrow_mut();
+            g.execute_turn(&mut p, 10); // B.O. Railroad
+        }
+        g.active_player.set(1 as usize); // update active player to renter
+        let s = SQUARES.get(5).unwrap();
+        let r = s.calculate_rent(3);
+        assert_eq!(r, Some(100)); 
+
+        g.active_player.set(0 as usize); // update active player to renter
+        { // scope the `mut p` reference, so we release it after this 'turn'
+            let mut p = g.players.get(g.active_player.get()).unwrap().borrow_mut();
+            g.execute_turn(&mut p, 10); // Short line
+        }
+        g.active_player.set(1 as usize); // update active player to renter
+        let s = SQUARES.get(5).unwrap();
+        let r = s.calculate_rent(3);
+        assert_eq!(r, Some(200)); 
     }
 
     #[test]

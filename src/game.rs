@@ -9,71 +9,6 @@ use std::cell::{Cell, RefCell};
 
 const BOARD_SIZE: i32 = 40; // 40 squares on the board
 // Change to a const, to avoid concurrency issues when running tests
-static SQUARES: [Square; BOARD_SIZE as usize] = [
-    Square::new("Just chillin' at the start", SquareType::Corner, None),
-    Square::new("Mediterranean Avenue", SquareType::Street, 
-        Some(StreetDetails::new('A', 60, 2, 4))),
-    Square::new("Community Chest", SquareType::CommunityCard, None),
-    Square::new("Baltic Avenue", SquareType::Street, 
-        Some(StreetDetails::new('A', 60, 4, 8))),
-    Square::new("Income Tax", SquareType::Tax, None),
-    Square::new("Reading Railroad", SquareType::Station, None),
-    Square::new("Oriental Avenue", SquareType::Street, 
-        Some(StreetDetails::new('B', 100, 6, 12))),
-    Square::new("Chance", SquareType::ChanceCard, None),
-    Square::new("Vermont Avenue", SquareType::Street, 
-        Some(StreetDetails::new('B', 100, 6, 12))),
-    Square::new("Connecticut Avenue", SquareType::Street, 
-        Some(StreetDetails::new('B', 120, 8, 16))),
-    Square::new("Visiting Jail", SquareType::Corner, None),
-    Square::new("St. Charles Place", SquareType::Street, 
-        Some(StreetDetails::new('C', 140, 10, 20))),
-    Square::new("Electric Company", SquareType::Utility, None),
-    Square::new("States Avenue", SquareType::Street, 
-        Some(StreetDetails::new('C', 140, 10, 20))),
-    Square::new("Virginia Avenue", SquareType::Street, 
-        Some(StreetDetails::new('C', 160, 12, 24))),
-    Square::new("Pennsylvania Railroad", SquareType::Station, None),
-    Square::new("St. James Place", SquareType::Street, 
-        Some(StreetDetails::new('D', 180, 14, 28))),
-    Square::new("Community Chest", SquareType::CommunityCard, None),
-    Square::new("Tennessee Avenue", SquareType::Street, 
-        Some(StreetDetails::new('D', 180, 14, 28))),
-    Square::new("New York Avenue", SquareType::Street, 
-        Some(StreetDetails::new('D', 200, 16, 32))),
-    Square::new("Yay! Free Parking", SquareType::Corner, None),
-    Square::new("Kentucky Avenue", SquareType::Street, 
-        Some(StreetDetails::new('E', 220, 18, 36))),
-    Square::new("Chance", SquareType::ChanceCard, None),
-    Square::new("Indiana Avenue", SquareType::Street, 
-        Some(StreetDetails::new('E', 220, 18, 36))),
-    Square::new("Illinois Avenue", SquareType::Street, 
-        Some(StreetDetails::new('E', 240, 20, 40))),
-    Square::new("B. & O. Railroad", SquareType::Station, None),
-    Square::new("Atlantic Avenue", SquareType::Street, 
-        Some(StreetDetails::new('F', 260, 22, 44))),
-    Square::new("Ventnor Avenue", SquareType::Street, 
-        Some(StreetDetails::new('F', 260, 22, 44))),
-    Square::new("Water Works", SquareType::Utility, None),
-    Square::new("Marvin Gardens", SquareType::Street, 
-        Some(StreetDetails::new('F', 280, 24, 48))),
-    Square::new("Go To Jail", SquareType::Corner, None),
-    Square::new("Pacific Avenue", SquareType::Street, 
-        Some(StreetDetails::new('G', 300, 26, 52))),
-    Square::new("North Carolina Avenue", SquareType::Street, 
-        Some(StreetDetails::new('G', 300, 26, 52))),
-    Square::new("Community Chest", SquareType::CommunityCard, None),
-    Square::new("Pennsylvania Avenue", SquareType::Street, 
-        Some(StreetDetails::new('G', 320, 28, 56))),
-    Square::new("Short Line", SquareType::Station, None),
-    Square::new("Chance", SquareType::ChanceCard, None),
-    Square::new("Park Place", SquareType::Street, 
-        Some(StreetDetails::new('H', 350, 35, 70))),
-    Square::new("Luxury Tax", SquareType::Tax, None),
-    Square::new("Boardwalk", SquareType::Street, 
-        Some(StreetDetails::new('H', 400, 50, 100)))
-];
-
 enum CardAction {
     Movement,
     MovementRelative, // move relative to starting square
@@ -151,6 +86,7 @@ struct Card {
 /// The structure, containing links to all parts of the game
 pub struct Game {
     players: Vec<RefCell<Player>>,
+    board: [Square; BOARD_SIZE as usize],
     active_player: Cell<usize>, // index of active player in the players vec
     chance_cards: RefCell<Vec<usize>>, // references to cards in CHANCE_CARDS
     community_cards: RefCell<Vec<usize>> // references to cards in COMMUNITY_CARDS
@@ -235,10 +171,36 @@ impl Game {
     /// Print the game summary
     // Prints out stats for each player
     pub fn print_summary(&self) {
-        for p in self.players.iter() {
-            println!("{}", p.borrow());
+        println!("==== Summary ====");
+        for p_cell in self.players.iter() {
+            let p = p_cell.borrow();
+            let occupying_square = self.board.get(p.position)
+                .expect("Player is not on the board");
+            println!("{} : ${}", p.name, p.cash);
+            match p.is_in_jail {
+                true  => println!("\t is IN JAIL, but still has ${}", p.cash),
+                false => println!("\t is on {} with ${}", occupying_square.name, p.cash) 
+            };
+            if p.num_get_out_of_jail_cards > 0 {
+                println!("\t has {} get-out-of-jail cards", p.num_get_out_of_jail_cards);
+            }
+            let owned_streets = self.board.iter()
+                .filter(|&x| { match x.asset.owner.get() {
+                    None => false,
+                    Some(owner_idx) => owner_idx == p.turn_idx
+                }})
+                .collect::<Vec<&Square>>();
+            match owned_streets.len() {
+                0 => println!("\t owns nothing :("),
+                _ => {
+                    println!("\t owns the following assets:");
+                    for s in owned_streets.iter() {
+                        println!("\t\t {}", s.name);
+                    }
+                }
+            };
         }
-        println!("");
+        println!("=================");
     }
 
     /// Execute action on card
@@ -286,6 +248,100 @@ impl Game {
         // TODO: Implement roll double digits to get out
     }
 
+    /// Get all squares owned by a player
+    fn get_player_owned_squares(&self, player_idx: usize) -> Vec<Square> {
+        let mut squares = Vec::<Square>::new();
+        for s in self.board.iter() {
+            match s.asset.owner.get() {
+                Some(owner_idx) => {
+                    if owner_idx == player_idx {
+                        squares.push(
+                            Square::new(s.name, s.square_type, s.street_details));
+                    }
+                },
+                None => {}
+            }
+        }
+        squares
+    }
+
+    /// Calculate rent. If the square is unowned, there is no rent
+    // Calculate rent, taking into account if a player owns all streets, and the number of
+    // properties on the street.
+    pub fn calculate_rent(&self, s: &Square, dice_roll: i32) -> Option<i32> {
+        let owner = match s.asset.owner.get() {
+            None => {
+                // Nobody owns this square
+                return None;
+            },
+            Some(r) => r
+        };
+
+        // Need owner of this square
+        // get all squares owner owns of the same type
+        let rent = match s.square_type {
+            SquareType::Utility => {
+                let owned_squares = self.get_player_owned_squares(owner);
+                let utility_num = owned_squares.iter()
+                    .filter(|&x| x.square_type == SquareType::Utility)
+                    .collect::<Vec<&Square>>().len();
+                let utility_num = utility_num as i32;
+                match utility_num {
+                    1 => dice_roll * 4,
+                    2 => dice_roll * 10,
+                    _ => 0 // Error, no rent
+                }
+            },
+            SquareType::Station => {
+                // See how many stations user has
+                let owned_squares = self.get_player_owned_squares(owner);
+                let station_num = owned_squares.iter()
+                    .filter(|&x| x.square_type == SquareType::Station)
+                    .collect::<Vec<&Square>>().len();
+                let station_num = station_num as i32;
+
+                match station_num {
+                    1 => 25,
+                    2 => 50,
+                    3 => 100, // $100 for 3 stations
+                    4 => 200,  // $200 for 4 stations
+                    _ => 0 // Error, no rent 
+                }
+            },
+            SquareType::Street => {
+                let owned_squares = self.get_player_owned_squares(owner);
+                let street_details = s.street_details.expect("Details expected");
+                let street_group = street_details.group;
+                let group_total = self.board.iter()
+                    .filter(|&x| { 
+                        match x.street_details {
+                            None => false,
+                            Some(d) => d.group == street_group
+                        }})
+                    .collect::<Vec<&Square>>().len();
+                let group_owned = owned_squares.iter()
+                    .filter(|&x| { 
+                        match x.street_details {
+                            None => false,
+                            Some(d) => d.group == street_group
+                        }})
+                    .collect::<Vec<&Square>>().len();
+
+                // println!("Street: {}", self.name);
+                // println!("group: {}", street_group);
+                // println!("group owned: {}", group_owned);
+                // println!("group total: {}", group_total);
+
+                match group_total == group_owned {
+                    true => street_details.rent_group,
+                    false => street_details.rent
+                }
+            }
+            _ => 0
+        };
+        Some(rent)
+    }
+
     /// Execute the turn of a player
     // The turn starts with a player moving. Then, once the player is on the new square,
     // the rules for that new square execute. Lastly, other players may want to execute 
@@ -301,7 +357,7 @@ impl Game {
         }
         // TODO: If 3 doubles, go to jail
         
-        let square = SQUARES.get(player.position).unwrap();
+        let square = self.board.get(player.position).unwrap();
         match square.square_type {
             SquareType::Corner => {
                 if player.position == 30 {
@@ -343,7 +399,7 @@ impl Game {
             },
             SquareType::Utility | SquareType::Station | SquareType::Street => {
                 println!("You landed on {}", square.name);
-                match square.calculate_rent(dice_roll) {
+                match self.calculate_rent(square, dice_roll) {
                     None => {
                         // No owner, therefore no rent
                         let price = square.get_price();
@@ -411,129 +467,6 @@ impl Square {
         }
     }
 
-    /// Get all squares owned by a player
-    fn get_player_owned_squares(player_idx: usize) -> Vec<Square> {
-        let mut squares = Vec::<Square>::new();
-        for s in SQUARES.iter() {
-            match s.asset.owner.get() {
-                Some(owner_idx) => {
-                    if owner_idx == player_idx {
-                        squares.push(
-                            Square::new(s.name, s.square_type, s.street_details));
-                    }
-                },
-                None => {}
-            }
-        }
-        squares
-    }
-
-    /// Calculate rent. If the square is unowned, there is no rent
-    // Calculate rent, taking into account if a player owns all streets, and the number of
-    // properties on the street.
-    pub fn calculate_rent(&self, dice_roll: i32) -> Option<i32> {
-        let owner = match self.asset.owner.get() {
-            None => {
-                // Nobody owns this square
-                return None;
-            },
-            Some(r) => r
-        };
-
-        // Need owner of this square
-        // get all squares owner owns of the same type
-        let rent = match self.square_type {
-            SquareType::Utility => {
-                let owned_squares = Square::get_player_owned_squares(owner);
-                let utility_num = owned_squares.iter()
-                    .filter(|&x| x.square_type == SquareType::Utility)
-                    .collect::<Vec<&Square>>().len();
-                let utility_num = utility_num as i32;
-                match utility_num {
-                    1 => dice_roll * 4,
-                    2 => dice_roll * 10,
-                    _ => 0 // Error, no rent
-                }
-            },
-            SquareType::Station => {
-                // See how many stations user has
-                let owned_squares = Square::get_player_owned_squares(owner);
-                let station_num = owned_squares.iter()
-                    .filter(|&x| x.square_type == SquareType::Station)
-                    .collect::<Vec<&Square>>().len();
-                let station_num = station_num as i32;
-
-                match station_num {
-                    1 => 25,
-                    2 => 50,
-                    3 => 100, // $100 for 3 stations
-                    4 => 200,  // $200 for 4 stations
-                    _ => 0 // Error, no rent 
-                }
-            },
-            SquareType::Street => {
-                let owned_squares = Square::get_player_owned_squares(owner);
-                let street_details = self.street_details.expect("Details expected");
-                let street_group = street_details.group;
-                let group_total = SQUARES.iter()
-                    .filter(|&x| { 
-                        match x.street_details {
-                            None => false,
-                            Some(d) => d.group == street_group
-                        }})
-                    .collect::<Vec<&Square>>().len();
-                let group_owned = owned_squares.iter()
-                    .filter(|&x| { 
-                        match x.street_details {
-                            None => false,
-                            Some(d) => d.group == street_group
-                        }})
-                    .collect::<Vec<&Square>>().len();
-
-                // println!("Street: {}", self.name);
-                // println!("group: {}", street_group);
-                // println!("group owned: {}", group_owned);
-                // println!("group total: {}", group_total);
-
-                match group_total == group_owned {
-                    true => street_details.rent_group,
-                    false => street_details.rent
-                }
-            }
-            _ => 0
-        };
-        Some(rent)
-    }
-}
-
-impl<'a> fmt::Display for Player {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let square = SQUARES.get(self.position).unwrap();
-        // get owned streets
-        let mut streets = Vec::<&str>::new();
-        for s in SQUARES.iter() {
-            match s.asset.owner.get() {
-                Some(owner_idx) => {
-                    if owner_idx == self.turn_idx {
-                        streets.push(&s.name);
-                    }
-                },
-                None => {}
-            }
-        }
-        write!(f, "--- {} ---
-            Square: {}
-            Cash: {}
-            In Jail?: {}
-            Get-Out-Of-Jail cards: {}
-            Streets: {:?}",
-            self.name, square.name, self.cash,
-            self.is_in_jail, self.num_get_out_of_jail_cards,
-            streets)
-        // TODO: if streets have houses/hotels, print them on the same line
-        // TODO: if has get-out-of-jail card, then print it
-        // TODO: if has mortgagages, print them
-    }
 }
 
 impl Player {
@@ -639,7 +572,75 @@ pub fn init(player_names: Vec::<String>) -> Game {
         players,
         chance_cards,
         community_cards,
+        board: load_squares()
     }
+}
+
+fn load_squares() -> [Square; BOARD_SIZE as usize] {
+    [
+        Square::new("Just chillin' at the start", SquareType::Corner, None),
+        Square::new("Mediterranean Avenue", SquareType::Street, 
+            Some(StreetDetails::new('A', 60, 2, 4))),
+        Square::new("Community Chest", SquareType::CommunityCard, None),
+        Square::new("Baltic Avenue", SquareType::Street, 
+            Some(StreetDetails::new('A', 60, 4, 8))),
+        Square::new("Income Tax", SquareType::Tax, None),
+        Square::new("Reading Railroad", SquareType::Station, None),
+        Square::new("Oriental Avenue", SquareType::Street, 
+            Some(StreetDetails::new('B', 100, 6, 12))),
+        Square::new("Chance", SquareType::ChanceCard, None),
+        Square::new("Vermont Avenue", SquareType::Street, 
+            Some(StreetDetails::new('B', 100, 6, 12))),
+        Square::new("Connecticut Avenue", SquareType::Street, 
+            Some(StreetDetails::new('B', 120, 8, 16))),
+        Square::new("Visiting Jail", SquareType::Corner, None),
+        Square::new("St. Charles Place", SquareType::Street, 
+            Some(StreetDetails::new('C', 140, 10, 20))),
+        Square::new("Electric Company", SquareType::Utility, None),
+        Square::new("States Avenue", SquareType::Street, 
+            Some(StreetDetails::new('C', 140, 10, 20))),
+        Square::new("Virginia Avenue", SquareType::Street, 
+            Some(StreetDetails::new('C', 160, 12, 24))),
+        Square::new("Pennsylvania Railroad", SquareType::Station, None),
+        Square::new("St. James Place", SquareType::Street, 
+            Some(StreetDetails::new('D', 180, 14, 28))),
+        Square::new("Community Chest", SquareType::CommunityCard, None),
+        Square::new("Tennessee Avenue", SquareType::Street, 
+            Some(StreetDetails::new('D', 180, 14, 28))),
+        Square::new("New York Avenue", SquareType::Street, 
+            Some(StreetDetails::new('D', 200, 16, 32))),
+        Square::new("Yay! Free Parking", SquareType::Corner, None),
+        Square::new("Kentucky Avenue", SquareType::Street, 
+            Some(StreetDetails::new('E', 220, 18, 36))),
+        Square::new("Chance", SquareType::ChanceCard, None),
+        Square::new("Indiana Avenue", SquareType::Street, 
+            Some(StreetDetails::new('E', 220, 18, 36))),
+        Square::new("Illinois Avenue", SquareType::Street, 
+            Some(StreetDetails::new('E', 240, 20, 40))),
+        Square::new("B. & O. Railroad", SquareType::Station, None),
+        Square::new("Atlantic Avenue", SquareType::Street, 
+            Some(StreetDetails::new('F', 260, 22, 44))),
+        Square::new("Ventnor Avenue", SquareType::Street, 
+            Some(StreetDetails::new('F', 260, 22, 44))),
+        Square::new("Water Works", SquareType::Utility, None),
+        Square::new("Marvin Gardens", SquareType::Street, 
+            Some(StreetDetails::new('F', 280, 24, 48))),
+        Square::new("Go To Jail", SquareType::Corner, None),
+        Square::new("Pacific Avenue", SquareType::Street, 
+            Some(StreetDetails::new('G', 300, 26, 52))),
+        Square::new("North Carolina Avenue", SquareType::Street, 
+            Some(StreetDetails::new('G', 300, 26, 52))),
+        Square::new("Community Chest", SquareType::CommunityCard, None),
+        Square::new("Pennsylvania Avenue", SquareType::Street, 
+            Some(StreetDetails::new('G', 320, 28, 56))),
+        Square::new("Short Line", SquareType::Station, None),
+        Square::new("Chance", SquareType::ChanceCard, None),
+        Square::new("Park Place", SquareType::Street, 
+            Some(StreetDetails::new('H', 350, 35, 70))),
+        Square::new("Luxury Tax", SquareType::Tax, None),
+        Square::new("Boardwalk", SquareType::Street, 
+            Some(StreetDetails::new('H', 400, 50, 100)))
+    ]
 }
 
 #[cfg(test)]
@@ -740,19 +741,20 @@ mod tests {
 
     #[test]
     fn calculate_rent_unowned() {
+        let g = init(vec!["Test".to_string()]);
         // Unowned square | No Rent
-        let s = SQUARES.get(1).unwrap();
-        let r = s.calculate_rent(3);
+        let s = g.board.get(1).unwrap();
+        let r = g.calculate_rent(s, 3);
         assert_eq!(r, None);
         
         // Income tax | No rent
-        let s = SQUARES.get(4).unwrap();
-        let r = s.calculate_rent(4);
+        let s = g.board.get(4).unwrap();
+        let r = g.calculate_rent(s, 4);
         assert_eq!(r, None);
        
         // no-rent square
-        let s = SQUARES.get(10).unwrap();
-        let r = s.calculate_rent(10);
+        let s = g.board.get(10).unwrap();
+        let r = g.calculate_rent(s, 10);
         assert_eq!(r, None);
     }
 
@@ -760,7 +762,7 @@ mod tests {
     #[test]
     fn calculate_rent_street() {
         let g = init(vec!["StreetOwner".to_string(), "StreetRenter".to_string()]);
-        let s = SQUARES.get(3).unwrap();
+        let s = g.board.get(3).unwrap();
         println!(" --- {} : {:?}", s.name, s.asset.owner);
         assert_eq!(s.asset.owner.get(), None);
 
@@ -784,35 +786,35 @@ mod tests {
         g.active_player.set(1 as usize); // update active player to renter
 
         // Rent for 1 of 2 set 
-        let s = SQUARES.get(3).unwrap(); // Baltic
-        let r = s.calculate_rent(3);
+        let s = g.board.get(3).unwrap(); // Baltic
+        let r = g.calculate_rent(s, 3);
         assert_eq!(r, Some(4));
 
         // Rent for 2 of 3 set 
-        let s = SQUARES.get(6).unwrap(); // Oriental
-        let r = s.calculate_rent(3);
+        let s = g.board.get(6).unwrap(); // Oriental
+        let r = g.calculate_rent(s, 3);
         assert_eq!(r, Some(6));
-        let s = SQUARES.get(8).unwrap(); // Vermont
-        let r = s.calculate_rent(3);
+        let s = g.board.get(8).unwrap(); // Vermont
+        let r = g.calculate_rent(s, 3);
         assert_eq!(r, Some(6));
 
         // rent for 3 of 3 set 
-        let s = SQUARES.get(11).unwrap(); // St. Charles 
-        let r = s.calculate_rent(3);
+        let s = g.board.get(11).unwrap(); // St. Charles 
+        let r = g.calculate_rent(s, 3);
         assert_eq!(r, Some(20));
-        let s = SQUARES.get(13).unwrap(); // States Ave
-        let r = s.calculate_rent(3);
+        let s = g.board.get(13).unwrap(); // States Ave
+        let r = g.calculate_rent(s, 3);
         assert_eq!(r, Some(20));
-        let s = SQUARES.get(14).unwrap(); // Virginia Ave
-        let r = s.calculate_rent(3);
+        let s = g.board.get(14).unwrap(); // Virginia Ave
+        let r = g.calculate_rent(s, 3);
         assert_eq!(r, Some(24));
         
         // rent for 2 of 2 set 
-        let s = SQUARES.get(37).unwrap(); // Park Ave
-        let r = s.calculate_rent(3);
+        let s = g.board.get(37).unwrap(); // Park Ave
+        let r = g.calculate_rent(s, 3);
         assert_eq!(r, Some(70));
-        let s = SQUARES.get(39).unwrap(); // Boardwalk
-        let r = s.calculate_rent(3);
+        let s = g.board.get(39).unwrap(); // Boardwalk
+        let r = g.calculate_rent(s, 3);
         assert_eq!(r, Some(100));
     }
 
@@ -826,8 +828,8 @@ mod tests {
             g.execute_turn(&mut p, 12); // Electric
         }
         g.active_player.set(1 as usize); // update active player to renter
-        let s = SQUARES.get(12).unwrap(); // Electric
-        let r = s.calculate_rent(3);
+        let s = g.board.get(12).unwrap(); // Electric
+        let r = g.calculate_rent(s, 3);
         assert_eq!(r, Some(12)); 
 
         g.active_player.set(0 as usize); // update active player to renter
@@ -836,8 +838,8 @@ mod tests {
             g.execute_turn(&mut p, 16); // Water
         }
         g.active_player.set(1 as usize); // update active player to renter
-        let s = SQUARES.get(28).unwrap(); // Electric
-        let r = s.calculate_rent(3);
+        let s = g.board.get(28).unwrap(); // Electric
+        let r = g.calculate_rent(s, 3);
         assert_eq!(r, Some(30)); 
     }
 
@@ -851,8 +853,8 @@ mod tests {
             g.execute_turn(&mut p, 5); // Reading Railroad
         }
         g.active_player.set(1 as usize); // update active player to renter
-        let s = SQUARES.get(5).unwrap();
-        let r = s.calculate_rent(3);
+        let s = g.board.get(5).unwrap();
+        let r = g.calculate_rent(s, 3);
         assert_eq!(r, Some(25)); 
 
         g.active_player.set(0 as usize); // update active player to renter
@@ -861,8 +863,8 @@ mod tests {
             g.execute_turn(&mut p, 10); // Pennsylvania Railroad
         }
         g.active_player.set(1 as usize); // update active player to renter
-        let s = SQUARES.get(5).unwrap();
-        let r = s.calculate_rent(3);
+        let s = g.board.get(5).unwrap();
+        let r = g.calculate_rent(s, 3);
         assert_eq!(r, Some(50)); 
 
         g.active_player.set(0 as usize); // update active player to renter
@@ -871,8 +873,8 @@ mod tests {
             g.execute_turn(&mut p, 10); // B.O. Railroad
         }
         g.active_player.set(1 as usize); // update active player to renter
-        let s = SQUARES.get(5).unwrap();
-        let r = s.calculate_rent(3);
+        let s = g.board.get(5).unwrap();
+        let r = g.calculate_rent(s, 3);
         assert_eq!(r, Some(100)); 
 
         g.active_player.set(0 as usize); // update active player to renter
@@ -881,15 +883,15 @@ mod tests {
             g.execute_turn(&mut p, 10); // Short line
         }
         g.active_player.set(1 as usize); // update active player to renter
-        let s = SQUARES.get(5).unwrap();
-        let r = s.calculate_rent(3);
+        let s = g.board.get(5).unwrap();
+        let r = g.calculate_rent(s, 3);
         assert_eq!(r, Some(200)); 
     }
 
     #[test]
     fn test_purchase_and_pay_rent() {
         let g = init(vec!["TestA".to_string(), "TestB".to_string()]);
-        let s = SQUARES.get(3).unwrap();
+        let s = g.board.get(3).unwrap();
         assert_eq!(s.asset.owner.get(), None);
 
         { // scope the `mut p` reference, so we release it after this 'turn'
@@ -912,7 +914,7 @@ mod tests {
     #[test]
     fn buy_property() {
         let g = init(vec!["Mongul".to_string()]);
-        let s = SQUARES.get(3).unwrap();
+        let s = g.board.get(3).unwrap();
         assert_eq!(s.asset.owner.get(), None);
 
         { // scope the `mut p` reference, so we release it after this 'turn'

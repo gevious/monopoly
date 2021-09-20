@@ -7,7 +7,6 @@ use std::io::{Write};
 use std::cell::{Cell, RefCell};
 
 const BOARD_SIZE: u32 = 40; // 40 squares on the board
-// Change to a const, to avoid concurrency issues when running tests
 enum CardAction {
     Movement,
     MovementRelative, // move relative to starting square
@@ -30,7 +29,7 @@ enum SquareType {
 }
 
 struct Asset {
-    owner: Cell<Option<usize>>, // usize is a ref to the index of the player object
+    owner: Cell<Option<usize>>, // usize is a reference to a players turn_idx
     house_num: u32,
     has_hotel: bool,
     is_mortgaged: bool
@@ -48,7 +47,8 @@ pub struct Game {
     players: Vec<RefCell<Player>>,
     board: [Square; BOARD_SIZE as usize],
     chance_cards: RefCell<Vec<Card>>,
-    community_cards: RefCell<Vec<Card>>
+    community_cards: RefCell<Vec<Card>>,
+    is_unit_test: bool
 }
 
 #[derive(PartialEq, Eq, Hash, Debug)]
@@ -64,9 +64,9 @@ pub struct Player {
 #[derive(Clone, Copy)]
 struct StreetDetails {
     group: char, // street group. No strong type, because it never changes
-    price: i32,
-    rent: i32,
-    rent_group: i32
+    price: u32,
+    rent: u32,
+    rent_group: u32
 }
 
 pub struct Square {
@@ -105,14 +105,56 @@ impl Game {
         loop {
             for p_ref in self.players.iter() {
                 let mut player = p_ref.borrow_mut();
-                print!("{}, roll dice: ", player.name);
+                print!("\n{}, roll dice: ", player.name);
                 let dice_roll = capture_dice_roll();
                 self.execute_turn(&mut *player, dice_roll);
+
+                // present options of other transactions user can make
+                self.additional_user_actions();
+
             }
 
             self.print_summary();
-            println!("");
         }
+    }
+
+    /// Print actions a player can make outside of their turn
+    fn additional_user_actions(&self) {
+        if self.is_unit_test {
+            return;
+        }
+
+        println!("1. Buy house (coming soon)");
+        println!("2. Buy hotel (coming soon)");
+        println!("3. Mortgage street (coming soon)");
+        println!("4. Unmortgage street (coming soon)");
+        println!("5. Sell street to another player (coming soon)");
+        println!("0. End turn");
+        print!("Select a valid option: ");
+        let _= io::stdout().flush();
+        let mut user_input = String::new();
+        match io::stdin().read_line(&mut user_input) {
+            Ok(_) => {
+                user_input.pop(); // Remove newline
+                match user_input.trim() {
+                    "0" => return,
+                    "1" | "2" | "3" | "4" | "5" => {
+                        println!(" :( Not yet implemented");
+                        return;
+                    },
+                    _  => println!("Invalid option. Try again")
+                }
+            },
+            Err(_) => {
+                println!("Invalid Input. Try again");
+            }
+        }
+    }
+
+    /// Update game state to unit test
+    // This mode will eliminate questions to the user that require keyboard input
+    pub fn set_unit_test(&mut self) {
+        self.is_unit_test = true;
     }
 
     /// Print the game summary
@@ -217,7 +259,7 @@ impl Game {
     /// Calculate rent. If the square is unowned, there is no rent
     // Calculate rent, taking into account if a player owns all streets, and the number of
     // properties on the street.
-    pub fn calculate_rent(&self, s: &Square, dice_roll: u32) -> Option<i32> {
+    pub fn calculate_rent(&self, s: &Square, dice_roll: u32) -> Option<u32> {
         let owner = match s.asset.owner.get() {
             None => {
                 // Nobody owns this square
@@ -228,16 +270,16 @@ impl Game {
 
         // Need owner of this square
         // get all squares owner owns of the same type
-        let rent: i32 = match s.square_type {
+        let rent: u32 = match s.square_type {
             SquareType::Utility => {
                 let owned_squares = self.get_player_owned_squares(owner);
                 let utility_num = owned_squares.iter()
                     .filter(|&x| x.square_type == SquareType::Utility)
                     .collect::<Vec<&Square>>().len();
-                let utility_num = utility_num as i32;
+                let utility_num = utility_num as u32;
                 match utility_num {
-                    1 => (dice_roll * 4) as i32,
-                    2 => (dice_roll * 10) as i32,
+                    1 => (dice_roll * 4) as u32,
+                    2 => (dice_roll * 10) as u32,
                     _ => 0 // Error, no rent
                 }
             },
@@ -247,7 +289,7 @@ impl Game {
                 let station_num = owned_squares.iter()
                     .filter(|&x| x.square_type == SquareType::Station)
                     .collect::<Vec<&Square>>().len();
-                let station_num = station_num as i32;
+                let station_num = station_num as u32;
 
                 match station_num {
                     1 => 25,
@@ -328,20 +370,131 @@ impl Game {
         cards.push(card);
     }
 
+    /// Capture yes/no answer from the user
+    fn want_to_buy_property(&self, square: &Square) -> bool {
+        if self.is_unit_test {
+            return true; // always buy property within unit test
+        }
+
+        loop {
+            println!("Do you want to buy {} for ${}? (Y/n)", square.name, square.get_price());
+            let _= io::stdout().flush();
+            let mut user_input = String::new();
+            match io::stdin().read_line(&mut user_input) {
+                Ok(_) => {
+                    user_input.pop(); // Remove newline
+                    match user_input.trim() {
+                        "Y" | "y" | ""  => return true,
+                        _ => return false
+                    }
+                },
+                Err(_) => {
+                    println!("Invalid Input. Try again");
+                }
+            }
+        }
+    }
+
+    /// Purchase the property
+    fn buy_property(&self, player: &mut Player, square: &Square, price: u32) {
+        if player.cash > (price as i32) {
+            println!("You buy it for ${}", price);
+            player.transact_cash(-1 * (price as i32));
+            square.asset.owner.replace(Some(player.turn_idx));
+        } else {
+            println!("Not enough money. You'll have to auction it");
+            self.auction(player, square);
+        }
+    }
+
+    /// Capture the idx of a player from the user
+    // This method is useful for out-of-band transactions. These include auctions and ad-hoc selling of property to others
+    fn get_player_idx(&self, player: &Player) -> usize {
+        // Do not print current player
+        let mut valid_options = Vec::<usize>::new();
+        for i in 0..self.players.len() {
+            if i == player.turn_idx {
+                continue;
+            }
+            valid_options.push(i);
+            println!("{}: {}", i, self.players.get(i).unwrap().borrow().name);
+        }
+
+        loop { // repeat until player enters a valid selection
+            print!("Enter the player number: ");
+            let _= io::stdout().flush();
+            let mut user_input = String::new();
+            match io::stdin().read_line(&mut user_input) {
+                Ok(_) => {
+                    user_input.pop(); // Remove newline
+                    let player_no = match user_input.parse::<usize>() {
+                        Ok(n) => n,
+                        Err(_) => {
+                            println!("Invalid input. Try again");
+                            continue;
+                        }
+                    };
+                    match valid_options.contains(&player_no) {
+                        true => {
+                            return player_no;
+                        },
+                        false => {
+                            println!("Invalid selection. Try again");
+                            continue;
+                        }
+                    }
+                },
+                Err(_) => {
+                    println!("Invalid selection. Try again");
+                }
+            }
+        }
+    }
+
+    /// Capture purchase price for property from the user
+    fn get_purchase_price(&self, square: &Square) -> u32 {
+        loop { // repeat until player enters a valid selection
+            print!("Enter the purchase price for {}: ", square.name);
+            let _= io::stdout().flush();
+            let mut user_input = String::new();
+            match io::stdin().read_line(&mut user_input) {
+                Ok(_) => {
+                    user_input.pop(); // Remove newline
+                    let player_no = match user_input.parse::<u32>() {
+                        Ok(n) => return n,
+                        Err(_) => {
+                            println!("Invalid input. Try again");
+                            continue;
+                        }
+                    };
+                },
+                Err(_) => {
+                    println!("Invalid selection. Try again");
+                }
+            }
+        }
+    }
+
+    /// Capture player name, and price, and complete purchase
+    fn auction(&self, player: &Player, square: &Square) {
+        println!("Auction!!");
+        let owner_idx = self.get_player_idx(player);
+        let purchase_price = self.get_purchase_price(square);
+
+        let mut owner = self.players.get(owner_idx).expect("Player should exist")
+                            .borrow_mut();
+        self.buy_property(&mut *owner, square, purchase_price);
+    }
+
     fn execute_square_property(&self, player: &mut Player, square: &Square,
                                dice_roll: u32) {
         println!("You landed on {}", square.name);
         match self.calculate_rent(square, dice_roll) {
             None => {
-                // No owner, therefore no rent
-                let price = square.get_price();
-                println!("You buy it for ${}", price);
-                if player.cash > price {
-                    player.transact_cash(-1 * price);
-                    square.asset.owner.replace(Some(player.turn_idx));
-                } else {
-                    println!("Not enough money. It stays on the market");
-                    // TODO: Implement auction where bank-person inputs player and price
+                // TODO: How can we bypass user input for unit tests?
+                match self.want_to_buy_property(square) {
+                    true => self.buy_property(player, square, square.get_price()),
+                    false => self.auction(player, square)
                 }
             }, 
             Some(rent) => {
@@ -350,12 +503,11 @@ impl Game {
                 if owner_idx == player.turn_idx {
                     println!("Phew! Luckily it's yours");
                 } else {
-                    // TODO: FIXME
                     let mut owner = self.players.get(owner_idx)
                         .expect("Owner should exist").borrow_mut();
                     println!("Oh no! You pay ${} to {}", rent, owner.name);
-                    player.transact_cash(-1 * rent);
-                    owner.transact_cash(rent);
+                    player.transact_cash(-1 * (rent as i32));
+                    owner.transact_cash(rent as i32);
                 }
             }
         }
@@ -378,18 +530,20 @@ impl Game {
         
         let square = self.board.get(player.position).unwrap();
         match square.square_type {
-            SquareType::Corner => self.execute_square_corner(player, &square),
-            SquareType::Tax => self.execute_square_tax(player),
+            SquareType::Utility |
+            SquareType::Station |
+            SquareType::Street        => self.execute_square_property(player, &square,
+                                                                      dice_roll),
+            SquareType::Corner        => self.execute_square_corner(player, &square),
+            SquareType::Tax           => self.execute_square_tax(player),
             SquareType::CommunityCard => self.execute_square_community(player),
-            SquareType::ChanceCard => self.execute_square_chance(player),
-            SquareType::Utility | SquareType::Station | SquareType::Street => 
-                self.execute_square_property(player, &square, dice_roll)
+            SquareType::ChanceCard    => self.execute_square_chance(player)
         }
     }
 }
 
 impl StreetDetails {
-    const fn new(group: char, price: i32, rent: i32, rent_group: i32) -> Self {
+    const fn new(group: char, price: u32, rent: u32, rent_group: u32) -> Self {
         Self {
             group,
             price,
@@ -416,7 +570,7 @@ impl Square {
 
 
     /// Get purchase price of the street
-    pub fn get_price(&self) -> i32 {
+    pub fn get_price(&self) -> u32 {
         match self.square_type {
             SquareType::Station => 200,
             SquareType::Utility => 150,
@@ -595,7 +749,8 @@ pub fn init(player_names: Vec::<String>) -> Game {
         players,
         chance_cards: RefCell::new(load_chance_cards()),
         community_cards: RefCell::new(load_community_chest_cards()),
-        board: load_squares()
+        board: load_squares(),
+        is_unit_test: false
     }
 }
 
@@ -764,7 +919,8 @@ mod tests {
 
     #[test]
     fn calculate_rent_unowned() {
-        let g = init(vec!["Test".to_string()]);
+        let mut g = init(vec!["Test".to_string()]);
+        g.set_unit_test();
         // Unowned square | No Rent
         let s = g.board.get(1).unwrap();
         let r = g.calculate_rent(s, 3);
@@ -783,7 +939,9 @@ mod tests {
 
     #[test]
     fn calculate_rent_street() {
-        let g = init(vec!["StreetOwner".to_string(), "StreetRenter".to_string()]);
+        let mut g = init(vec!["StreetOwner".to_string(),
+                          "StreetRenter".to_string()]);
+        g.set_unit_test();
         let s = g.board.get(3).unwrap();
         println!(" --- {} : {:?}", s.name, s.asset.owner);
         assert_eq!(s.asset.owner.get(), None);
@@ -839,7 +997,8 @@ mod tests {
     #[test]
     fn calculate_rent_utility() {
         // Buy 1 utility, then buy the second
-        let g = init(vec!["TestOwner".to_string(), "TestRenter".to_string()]);
+        let mut g = init(vec!["TestOwner".to_string(), "TestRenter".to_string()]);
+        g.set_unit_test();
 
         let mut p = g.players.get(0).unwrap().borrow_mut();
         g.execute_turn(&mut p, 12); // Electric
@@ -856,7 +1015,9 @@ mod tests {
     #[test]
     fn calculate_rent_station() {
         // Buy stations one at a time
-        let g = init(vec!["StationOwner".to_string(), "StationRenter".to_string()]);
+        let mut g = init(vec!["StationOwner".to_string(),
+                              "StationRenter".to_string()]);
+        g.set_unit_test();
 
         let mut p = g.players.get(0).unwrap().borrow_mut();
         g.execute_turn(&mut p, 5); // Reading Railroad
@@ -882,7 +1043,8 @@ mod tests {
 
     #[test]
     fn purchase_and_pay_rent() {
-        let g = init(vec!["Owner".to_string(), "Renter".to_string()]);
+        let mut g = init(vec!["Owner".to_string(), "Renter".to_string()]);
+        g.set_unit_test();
         let s = g.board.get(3).unwrap();
         assert_eq!(s.asset.owner.get(), None);
 
@@ -902,8 +1064,9 @@ mod tests {
     }
 
     #[test]
-    fn buy_property() {
-        let g = init(vec!["Mongul".to_string()]);
+    fn buy_each_property_type() {
+        let mut g = init(vec!["Mongul".to_string()]);
+        g.set_unit_test();
         let s = g.board.get(3).unwrap();
         assert_eq!(s.asset.owner.get(), None);
 

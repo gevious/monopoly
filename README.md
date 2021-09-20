@@ -22,7 +22,7 @@ Monopoly clone, to help visually impaired keep track of resources
 - [x] Player is charged rent for water/electricity
 - [x] Player is charged rent for multiple stations 
 - [x] Player is charged rent for streets if player owns all streets
-- [ ] Player can choose to auction street (if applicable)
+- [x] Player can choose to auction street (if applicable)
 - [ ] Player can buy house (calculates applicable streets)
 - [ ] Player is charged rent for streets for x number of houses
 - [ ] Player can buy hotel (calculates applicable streets)

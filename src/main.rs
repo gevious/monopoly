@@ -4,6 +4,7 @@ use std::convert::TryInto;
 
 mod game;
 mod dialog;
+mod publisher;
 
 /// Get the number of players
 fn get_player_num(user_input: String) -> Result<i32, ()> {

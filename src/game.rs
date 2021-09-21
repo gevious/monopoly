@@ -4,7 +4,7 @@ use rand::seq::SliceRandom;
 use std::collections::HashMap;
 use std::cell::{Cell, RefCell};
 
-use super::dialog;
+use super::{dialog, publisher};
 
 const BOARD_SIZE: u32 = 40; // 40 squares on the board
 enum CardAction {
@@ -28,8 +28,8 @@ enum SquareType {
     Utility
 }
 
-struct Asset {
-    owner: Cell<Option<usize>>, // usize is a reference to a players turn_idx
+pub struct Asset {
+    pub owner: Cell<Option<usize>>, // usize is a reference to a players turn_idx
     house_num: u32,
     has_hotel: bool,
     is_mortgaged: bool
@@ -45,7 +45,7 @@ struct Card {
 /// The structure, containing links to all parts of the game
 pub struct Game {
     pub players: Vec<RefCell<Player>>,
-    board: [Square; BOARD_SIZE as usize],
+    pub board: [Square; BOARD_SIZE as usize],
     chance_cards: RefCell<Vec<Card>>,
     community_cards: RefCell<Vec<Card>>,
     is_unit_test: bool
@@ -54,11 +54,11 @@ pub struct Game {
 #[derive(PartialEq, Eq, Hash, Debug)]
 pub struct Player {
     pub name: String,
-    position: usize, // the index of the board square
+    pub position: usize, // the index of the board square
     pub turn_idx: usize, // idx in the group of players. need this to match asset
-    cash: i32,
-    is_in_jail: bool,
-    num_get_out_of_jail_cards: u32,
+    pub cash: i32,
+    pub is_in_jail: bool,
+    pub num_get_out_of_jail_cards: u32,
 }
 
 #[derive(Clone, Copy)]
@@ -73,7 +73,7 @@ pub struct Square {
     pub name: String,
     square_type: SquareType,
     street_details: Option<StreetDetails>,
-    asset: Asset
+    pub asset: Asset
 }
 
 impl Asset {
@@ -104,17 +104,20 @@ impl Game {
     pub fn start(mut self) {
         loop {
             for p_ref in self.players.iter() {
-                let mut player = p_ref.borrow_mut();
-                print!("\n{}, roll dice: ", player.name);
-                let dice_roll = dialog::capture_dice_roll();
-                self.execute_turn(&mut *player, dice_roll);
+                {
+                    let mut player = p_ref.borrow_mut();
+                    print!("\n{}, roll dice: ", player.name);
+                    let dice_roll = dialog::capture_dice_roll();
+                    self.execute_turn(&mut *player, dice_roll);
+                }
+                publisher::publish(&self);
 
                 // present options of other transactions user can make
                 if !self.is_unit_test {
                     dialog::additional_user_actions();
+                    publisher::publish(&self);
                 }
             }
-
             self.print_summary();
         }
     }

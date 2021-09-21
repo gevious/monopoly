@@ -1,5 +1,5 @@
 # monopoly
-Monopoly clone, to help visually impaired keep track of resources
+Monopoly clone, to help visually impaired keep track of resourcesG
 
 # Roadmap 
 - [x] Infinite loop asking for dice roll
@@ -38,3 +38,6 @@ Monopoly clone, to help visually impaired keep track of resources
 - [ ] Card event: pay players money for birthday
 - [ ] Player cannot go into negative cash
 - [ ] If player cannot pay rent, enforce selling assets
+
+# S3 upload
+Currently, I hacked the s3 upload to use the AWS CLI. Credentials are stored locally, in the 'monopoly' profile

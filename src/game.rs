@@ -2,9 +2,9 @@ use rand::thread_rng;
 use rand::seq::SliceRandom;
 
 use std::collections::HashMap;
-use std::io;
-use std::io::{Write};
 use std::cell::{Cell, RefCell};
+
+use super::dialog;
 
 const BOARD_SIZE: u32 = 40; // 40 squares on the board
 enum CardAction {
@@ -44,7 +44,7 @@ struct Card {
 
 /// The structure, containing links to all parts of the game
 pub struct Game {
-    players: Vec<RefCell<Player>>,
+    pub players: Vec<RefCell<Player>>,
     board: [Square; BOARD_SIZE as usize],
     chance_cards: RefCell<Vec<Card>>,
     community_cards: RefCell<Vec<Card>>,
@@ -53,9 +53,9 @@ pub struct Game {
 
 #[derive(PartialEq, Eq, Hash, Debug)]
 pub struct Player {
-    name: String,
+    pub name: String,
     position: usize, // the index of the board square
-    turn_idx: usize, // idx in the group of players. need this to match asset
+    pub turn_idx: usize, // idx in the group of players. need this to match asset
     cash: i32,
     is_in_jail: bool,
     num_get_out_of_jail_cards: u32,
@@ -70,7 +70,7 @@ struct StreetDetails {
 }
 
 pub struct Square {
-    name: String,
+    pub name: String,
     square_type: SquareType,
     street_details: Option<StreetDetails>,
     asset: Asset
@@ -106,50 +106,30 @@ impl Game {
             for p_ref in self.players.iter() {
                 let mut player = p_ref.borrow_mut();
                 print!("\n{}, roll dice: ", player.name);
-                let dice_roll = capture_dice_roll();
+                let dice_roll = dialog::capture_dice_roll();
                 self.execute_turn(&mut *player, dice_roll);
 
                 // present options of other transactions user can make
-                self.additional_user_actions();
-
+                if !self.is_unit_test {
+                    dialog::additional_user_actions();
+                }
             }
 
             self.print_summary();
         }
     }
 
-    /// Print actions a player can make outside of their turn
-    fn additional_user_actions(&self) {
-        if self.is_unit_test {
-            return;
-        }
+    /// Capture player name, and price, and complete purchase
+    fn auction(&self, player: &Player, square: &Square) {
+        println!("Auction!!");
+        let owner_idx = dialog::get_player_idx(self, player);
+        let purchase_price = dialog::get_purchase_price(square);
 
-        println!("1. Buy house (coming soon)");
-        println!("2. Buy hotel (coming soon)");
-        println!("3. Mortgage street (coming soon)");
-        println!("4. Unmortgage street (coming soon)");
-        println!("5. Sell street to another player (coming soon)");
-        println!("0. End turn");
-        print!("Select a valid option: ");
-        let _= io::stdout().flush();
-        let mut user_input = String::new();
-        match io::stdin().read_line(&mut user_input) {
-            Ok(_) => {
-                user_input.pop(); // Remove newline
-                match user_input.trim() {
-                    "0" => return,
-                    "1" | "2" | "3" | "4" | "5" => {
-                        println!(" :( Not yet implemented");
-                        return;
-                    },
-                    _  => println!("Invalid option. Try again")
-                }
-            },
-            Err(_) => {
-                println!("Invalid Input. Try again");
-            }
-        }
+        let mut owner = self.players.get(owner_idx).expect("Player should exist")
+                            .borrow_mut();
+        self.buy_property(&mut *owner, square, purchase_price);
     }
+
 
     /// Update game state to unit test
     // This mode will eliminate questions to the user that require keyboard input
@@ -370,31 +350,6 @@ impl Game {
         cards.push(card);
     }
 
-    /// Capture yes/no answer from the user
-    fn want_to_buy_property(&self, square: &Square) -> bool {
-        if self.is_unit_test {
-            return true; // always buy property within unit test
-        }
-
-        loop {
-            println!("Do you want to buy {} for ${}? (Y/n)", square.name, square.get_price());
-            let _= io::stdout().flush();
-            let mut user_input = String::new();
-            match io::stdin().read_line(&mut user_input) {
-                Ok(_) => {
-                    user_input.pop(); // Remove newline
-                    match user_input.trim() {
-                        "Y" | "y" | ""  => return true,
-                        _ => return false
-                    }
-                },
-                Err(_) => {
-                    println!("Invalid Input. Try again");
-                }
-            }
-        }
-    }
-
     /// Purchase the property
     fn buy_property(&self, player: &mut Player, square: &Square, price: u32) {
         if player.cash > (price as i32) {
@@ -407,92 +362,19 @@ impl Game {
         }
     }
 
-    /// Capture the idx of a player from the user
-    // This method is useful for out-of-band transactions. These include auctions and ad-hoc selling of property to others
-    fn get_player_idx(&self, player: &Player) -> usize {
-        // Do not print current player
-        let mut valid_options = Vec::<usize>::new();
-        for i in 0..self.players.len() {
-            if i == player.turn_idx {
-                continue;
-            }
-            valid_options.push(i);
-            println!("{}: {}", i, self.players.get(i).unwrap().borrow().name);
-        }
-
-        loop { // repeat until player enters a valid selection
-            print!("Enter the player number: ");
-            let _= io::stdout().flush();
-            let mut user_input = String::new();
-            match io::stdin().read_line(&mut user_input) {
-                Ok(_) => {
-                    user_input.pop(); // Remove newline
-                    let player_no = match user_input.parse::<usize>() {
-                        Ok(n) => n,
-                        Err(_) => {
-                            println!("Invalid input. Try again");
-                            continue;
-                        }
-                    };
-                    match valid_options.contains(&player_no) {
-                        true => {
-                            return player_no;
-                        },
-                        false => {
-                            println!("Invalid selection. Try again");
-                            continue;
-                        }
-                    }
-                },
-                Err(_) => {
-                    println!("Invalid selection. Try again");
-                }
-            }
-        }
-    }
-
-    /// Capture purchase price for property from the user
-    fn get_purchase_price(&self, square: &Square) -> u32 {
-        loop { // repeat until player enters a valid selection
-            print!("Enter the purchase price for {}: ", square.name);
-            let _= io::stdout().flush();
-            let mut user_input = String::new();
-            match io::stdin().read_line(&mut user_input) {
-                Ok(_) => {
-                    user_input.pop(); // Remove newline
-                    let player_no = match user_input.parse::<u32>() {
-                        Ok(n) => return n,
-                        Err(_) => {
-                            println!("Invalid input. Try again");
-                            continue;
-                        }
-                    };
-                },
-                Err(_) => {
-                    println!("Invalid selection. Try again");
-                }
-            }
-        }
-    }
-
-    /// Capture player name, and price, and complete purchase
-    fn auction(&self, player: &Player, square: &Square) {
-        println!("Auction!!");
-        let owner_idx = self.get_player_idx(player);
-        let purchase_price = self.get_purchase_price(square);
-
-        let mut owner = self.players.get(owner_idx).expect("Player should exist")
-                            .borrow_mut();
-        self.buy_property(&mut *owner, square, purchase_price);
-    }
-
     fn execute_square_property(&self, player: &mut Player, square: &Square,
                                dice_roll: u32) {
         println!("You landed on {}", square.name);
         match self.calculate_rent(square, dice_roll) {
             None => {
-                // TODO: How can we bypass user input for unit tests?
-                match self.want_to_buy_property(square) {
+
+                // For unit tests, purchase automatically, with no auction option
+                if self.is_unit_test {
+                    self.buy_property(player, square, square.get_price());
+                    return;
+                }
+
+                match super::dialog::want_to_buy_property(square) {
                     true => self.buy_property(player, square, square.get_price()),
                     false => self.auction(player, square)
                 }
@@ -612,45 +494,6 @@ impl Player {
     // Adds `amount` to players cash amount. Also works for negative numbers
     pub fn transact_cash(&mut self, amount: i32) {
         self.cash += amount;
-    }
-}
-
-/// Get the dice roll from the user
-// This method gets a user input, validates its a number, and the number is within range
-// of 2 dice (ie between 2 and 12)
-fn get_dice_roll(user_input: String) -> Result<u32, ()> {
-    // Convert to number
-    let dice_roll = match user_input.parse::<u32>() {
-        Ok(d) => d,
-        Err(_e) => {
-            return Err(());
-        }
-    };
-    match dice_roll {
-        2..=12 => Ok(dice_roll),
-        _ => {
-            Err(())
-        }
-    }
-}
-
-/// Capture the roll of the dice
-fn capture_dice_roll() -> u32 {
-    loop {
-        let _= io::stdout().flush();
-        let mut user_input = String::new();
-        io::stdin().read_line(&mut user_input).expect("Did not enter a valid number");
-        user_input.pop(); // Remove newline
-
-        match get_dice_roll(user_input) {
-            Ok(roll) => {
-                return roll;
-            },
-            Err(_) => {
-                println!("Enter a number between 2 and 12");
-                continue;
-            }
-        };
     }
 }
 
@@ -824,16 +667,6 @@ fn load_squares() -> [Square; BOARD_SIZE as usize] {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn roll_dice() {
-        assert_eq!(get_dice_roll("Yo".to_string()), Err(()));
-        assert_eq!(get_dice_roll("2.3".to_string()), Err(()));
-        assert_eq!(get_dice_roll("1".to_string()), Err(()));
-        assert_eq!(get_dice_roll("2".to_string()), Ok(2));
-        assert_eq!(get_dice_roll("12".to_string()), Ok(12));
-        assert_eq!(get_dice_roll("13".to_string()), Err(()));
-    }
 
     #[test]
     fn initialize_game() {

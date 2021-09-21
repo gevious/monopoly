@@ -3,6 +3,7 @@ use std::io::{Write};
 use std::convert::TryInto;
 
 mod game;
+mod dialog;
 
 /// Get the number of players
 fn get_player_num(user_input: String) -> Result<i32, ()> {

@@ -128,31 +128,14 @@ impl Game {
                 dialog::UserAction::EndTurn => return,
                 dialog::UserAction::SellStreet => {
                     let mut orig_owner = self.players.get(
-                        dialog::get_player_idx(&self, None)).unwrap().borrow_mut();
-                    let mut new_owner = self.players.get(
-                        dialog::get_player_idx(&self, Some(&*orig_owner))).unwrap().borrow_mut();
+                        dialog::get_player_idx(&self, None, "Select the current owner"))
+                                .unwrap().borrow_mut();
+                    let street_idx = dialog::get_street(&self, &*orig_owner);
 
-                    let mut street_idx: usize = 0;
-                    loop {
-                        let street = dialog::get_street(&self);
-                        let eligible_streets :Vec<usize> = self.board.iter().enumerate()
-                            .filter(|(i, s)| { match s.asset.owner.get() {
-                                    None => false,
-                                    Some(u) => u == orig_owner.turn_idx
-                                }
-                            })
-                            .filter(|(i, s)| { 
-                                s.name.to_ascii_lowercase() == street.to_ascii_lowercase()
-                            })
-                            .map(|(i, s)| i )
-                            .collect();
-                        if eligible_streets.len() == 1 {
-                            street_idx = *eligible_streets.get(0).unwrap();
-                            break;
-                        } else {
-                            println!("Street not found. Try again");
-                        }
-                    }
+                    let mut new_owner = self.players.get(
+                        dialog::get_player_idx(&self, Some(&*orig_owner),
+                                               "Select the new owner"))
+                                .unwrap().borrow_mut();
                     let purchase_price = dialog::get_amount();
 
                     println!("Sell {} to {} for ${}",
@@ -205,7 +188,8 @@ impl Game {
     /// Capture player name, and price, and complete purchase
     fn auction(&self, player: &Player, square: &Square) {
         println!("Auction!!");
-        let owner_idx = dialog::get_player_idx(self, Some(player));
+        let owner_idx = dialog::get_player_idx(self, Some(player),
+                                               "Select the new owner");
         let purchase_price = dialog::get_purchase_price(square);
 
         let mut owner = self.players.get(owner_idx).expect("Player should exist")

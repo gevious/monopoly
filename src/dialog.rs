@@ -128,7 +128,7 @@ pub fn want_to_buy_property(square: &Square) -> bool {
 
 /// Capture the idx of a player from the user
 // This method is useful for out-of-band transactions. These include auctions and ad-hoc selling of property to others
-pub fn get_player_idx(game: &Game, player: Option<&Player>) -> usize {
+pub fn get_player_idx(game: &Game, player: Option<&Player>, msg: &str) -> usize {
     // Do not print current player
     let mut valid_options = Vec::<usize>::new();
     for i in 0..game.players.len() {
@@ -136,11 +136,11 @@ pub fn get_player_idx(game: &Game, player: Option<&Player>) -> usize {
             continue;
         }
         valid_options.push(i);
-        println!("{}: {}", i, game.players.get(i).unwrap().borrow().name);
+        println!("{}: {}", i+1, game.players.get(i).unwrap().borrow().name);
     }
 
     loop { // repeat until player enters a valid selection
-        print!("Enter the player number: ");
+        print!("{}: ", &msg);
         let _= io::stdout().flush();
         let mut user_input = String::new();
         match io::stdin().read_line(&mut user_input) {
@@ -155,7 +155,7 @@ pub fn get_player_idx(game: &Game, player: Option<&Player>) -> usize {
                 };
                 match valid_options.contains(&player_no) {
                     true => {
-                        return player_no;
+                        return player_no-1; // user menu starts from 1 (not 0)
                     },
                     false => {
                         println!("Invalid selection. Try again");
@@ -195,15 +195,33 @@ pub fn get_purchase_price(square: &Square) -> u32 {
 }
 
 /// Get the street name from user, and return the index on the board where the street is
-pub fn get_street(game: &Game) -> String {
+pub fn get_street(game: &Game, owner: &Player) -> usize {
+    let eligible_streets :Vec<(usize, &Square)> = game.board.iter().enumerate()
+        .filter(|(i, s)| { match s.asset.owner.get() {
+                None => false,
+                Some(u) => u == owner.turn_idx
+            }
+        })
+        .collect();
     loop { // repeat until player enters a valid selection
+        for (i, s) in eligible_streets.iter().enumerate() {
+            println!("{}. {}", i+1, s.1.name);
+        }
         print!("Enter the street: ");
         let _= io::stdout().flush();
         let mut user_input = String::new();
         match io::stdin().read_line(&mut user_input) {
             Ok(_) => {
                 user_input.pop(); // Remove newline
-                return String::from(user_input.trim());
+                match user_input.parse::<usize>() {
+                    Ok(n)  => {
+                        if n <= eligible_streets.len() {
+                            return eligible_streets.get(n-1).expect("Street expected").0;
+                        }
+                        println!("Invalid option selected. Try again");
+                    },
+                    Err(_) => println!("Invalid street selected. Try again")
+                }
             },
             Err(_) => {
                 println!("Invalid selection. Try again");

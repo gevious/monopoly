@@ -1,5 +1,5 @@
 use std::fs;
-use std::process::Command;
+use async_process::Command;
 
 
 use super::game::{Game, Player, Square};
@@ -56,8 +56,7 @@ fn upload(content: String) {
     // For now, i'm just calling a CLI command. 
     // TODO: Implement AWS SDK to make this more robust
     Command::new("./src/upload.sh")
-        .output()
-        .expect("Failed to execute command");
+        .output();
 }
 
 #[cfg(test)]

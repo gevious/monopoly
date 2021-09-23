@@ -2,7 +2,7 @@ use std::fs;
 use async_process::Command;
 
 
-use super::game::{Game, Player, Square};
+use super::game::{Game, Square};
 
 const TEMP_FILE :&str = "/tmp/index.html";
 

@@ -15,14 +15,14 @@ pub enum UserAction {
 }
 
 /// Print actions a player can make outside of their turn
-pub fn additional_user_actions() -> UserAction {
-    println!("1. Buy house (coming soon)");
-    println!("2. Sell house (coming soon)");
-    println!("3. Buy hotel (coming soon)");
-    println!("4. Sell hotel (coming soon)");
-    println!("5. Mortgage street (coming soon)");
-    println!("6. Unmortgage street (coming soon)");
-    println!("7. Sell street to another player (coming soon)");
+pub fn additional_user_actions(game: &Game) -> UserAction {
+    println!("1. Sell street to another player");
+    println!("2. Buy house (coming soon)");
+    println!("3. Sell house (coming soon)");
+    println!("4. Buy hotel (coming soon)");
+    println!("5. Sell hotel (coming soon)");
+    println!("6. Mortgage street (coming soon)");
+    println!("7. Unmortgage street (coming soon)");
     println!("0. End turn");
     loop {
         print!("Select a valid option: ");
@@ -34,33 +34,26 @@ pub fn additional_user_actions() -> UserAction {
                 match user_input.trim() {
                     "0" => return UserAction::EndTurn,
                     "1" => {
-                        println!(" :( Not yet implemented");
-                        return UserAction::BuyHouse;
+                        return UserAction::SellStreet;
                     },
                     "2" => {
-                        println!(" :( Not yet implemented");
-                        return UserAction::SellHouse;
+                        return UserAction::BuyHouse;
                     },
                     "3" => {
-                        println!(" :( Not yet implemented");
-                        return UserAction::BuyHotel;
+                        return UserAction::SellHouse;
                     },
                     "4" => {
-                        println!(" :( Not yet implemented");
-                        return UserAction::SellHotel;
+                        return UserAction::BuyHotel;
                     }
                     "5" => {
-                        println!(" :( Not yet implemented");
-                        return UserAction::Mortgage;
+                        return UserAction::SellHotel;
                     },
                     "6" => {
-                        println!(" :( Not yet implemented");
-                        return UserAction::Unmortgage;
+                        return UserAction::Mortgage;
                     },
                     "7" => {
-                        println!(" :( Not yet implemented");
-                        return UserAction::SellStreet;
-                    }
+                        return UserAction::Unmortgage;
+                    },
                     _  => println!("Invalid option. Try again")
                 }
             },
@@ -135,11 +128,11 @@ pub fn want_to_buy_property(square: &Square) -> bool {
 
 /// Capture the idx of a player from the user
 // This method is useful for out-of-band transactions. These include auctions and ad-hoc selling of property to others
-pub fn get_player_idx(game: &Game, player: &Player) -> usize {
+pub fn get_player_idx(game: &Game, player: Option<&Player>) -> usize {
     // Do not print current player
     let mut valid_options = Vec::<usize>::new();
     for i in 0..game.players.len() {
-        if i == player.turn_idx {
+        if player != None && i == player.unwrap().turn_idx {
             continue;
         }
         valid_options.push(i);
@@ -200,6 +193,49 @@ pub fn get_purchase_price(square: &Square) -> u32 {
         }
     }
 }
+
+/// Get the street name from user, and return the index on the board where the street is
+pub fn get_street(game: &Game) -> String {
+    loop { // repeat until player enters a valid selection
+        print!("Enter the street: ");
+        let _= io::stdout().flush();
+        let mut user_input = String::new();
+        match io::stdin().read_line(&mut user_input) {
+            Ok(_) => {
+                user_input.pop(); // Remove newline
+                return String::from(user_input.trim());
+            },
+            Err(_) => {
+                println!("Invalid selection. Try again");
+            }
+        }
+    }
+}
+
+/// Get an amount from the user
+pub fn get_amount() -> u32 {
+    loop { // repeat until player enters a valid selection
+        print!("Enter the amount: ");
+        let _= io::stdout().flush();
+        let mut user_input = String::new();
+        match io::stdin().read_line(&mut user_input) {
+            Ok(_) => {
+                user_input.pop(); // Remove newline
+                let player_no = match user_input.parse::<u32>() {
+                    Ok(n) => return n,
+                    Err(_) => {
+                        println!("Invalid input. Try again");
+                        continue;
+                    }
+                };
+            },
+            Err(_) => {
+                println!("Invalid selection. Try again");
+            }
+        }
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

@@ -18,7 +18,7 @@ enum CardAction {
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, Copy)]
-enum SquareType {
+pub enum SquareType {
     ChanceCard,
     CommunityCard,
     Corner,
@@ -56,7 +56,7 @@ pub struct Player {
     pub name: String,
     pub position: usize, // the index of the board square
     pub turn_idx: usize, // idx in the group of players. need this to match asset
-    pub cash: i32,
+    pub cash: u32,
     pub is_in_jail: bool,
     pub num_get_out_of_jail_cards: u32,
 }
@@ -71,7 +71,7 @@ struct StreetDetails {
 
 pub struct Square {
     pub name: String,
-    square_type: SquareType,
+    pub square_type: SquareType,
     street_details: Option<StreetDetails>,
     pub asset: Asset
 }
@@ -110,22 +110,102 @@ impl Game {
                     let dice_roll = dialog::capture_dice_roll();
                     self.execute_turn(&mut *player, dice_roll);
                 }
-                publisher::publish(&self);
 
                 // present options of other transactions user can make
                 if !self.is_unit_test {
-                    dialog::additional_user_actions();
-                    publisher::publish(&self);
+                    self.execute_user_action();
                 }
             }
             self.print_summary();
         }
     }
 
+    fn execute_user_action(&self) {
+        loop {
+            publisher::publish(&self);
+            let option = dialog::additional_user_actions(&self);
+            match option {
+                dialog::UserAction::EndTurn => return,
+                dialog::UserAction::SellStreet => {
+                    let mut orig_owner = self.players.get(
+                        dialog::get_player_idx(&self, None)).unwrap().borrow_mut();
+                    let mut new_owner = self.players.get(
+                        dialog::get_player_idx(&self, Some(&*orig_owner))).unwrap().borrow_mut();
+
+                    let mut street_idx: usize = 0;
+                    loop {
+                        let street = dialog::get_street(&self);
+                        let eligible_streets :Vec<usize> = self.board.iter().enumerate()
+                            .filter(|(i, s)| { match s.asset.owner.get() {
+                                    None => false,
+                                    Some(u) => u == orig_owner.turn_idx
+                                }
+                            })
+                            .filter(|(i, s)| { 
+                                s.name.to_ascii_lowercase() == street.to_ascii_lowercase()
+                            })
+                            .map(|(i, s)| i )
+                            .collect();
+                        if eligible_streets.len() == 1 {
+                            street_idx = *eligible_streets.get(0).unwrap();
+                            break;
+                        } else {
+                            println!("Street not found. Try again");
+                        }
+                    }
+                    let purchase_price = dialog::get_amount();
+
+                    println!("Sell {} to {} for ${}",
+                             street_idx, new_owner.name, purchase_price);
+                    if self.has_buildings(street_idx) {
+                        println!("The street has buildings. Sell them first");
+                        continue;
+                    }
+                    if new_owner.cash < purchase_price {
+                        println!("{} cannot afford the street", new_owner.name);
+                        continue;
+                    }
+
+                    let square = self.board.get(street_idx)
+                                     .expect("Street should exist");
+                    {
+                        self.sell_property(&mut *orig_owner, &mut *new_owner,
+                                           square, purchase_price);
+                    }
+                },
+                dialog::UserAction::BuyHouse => {
+                    println!(" :( Not yet implemented");
+                },
+                dialog::UserAction::SellHouse => {
+                    println!(" :( Not yet implemented");
+                },
+                dialog::UserAction::BuyHotel => {
+                    println!(" :( Not yet implemented");
+                }
+                dialog::UserAction::SellHotel => {
+                    println!(" :( Not yet implemented");
+                },
+                dialog::UserAction::Mortgage => {
+                    println!(" :( Not yet implemented");
+                },
+                dialog::UserAction::Unmortgage => {
+                    println!(" :( Not yet implemented");
+                }
+                _  => println!("Invalid option. Try again")
+            }
+        }
+    }
+
+    /// Calculate if a street has houses built on it
+    fn has_buildings(&self, street_idx: usize) -> bool {
+        let a = &self.board.get(street_idx).expect("Street should exist").asset;
+        a.has_hotel || a.house_num > 0
+    }
+
     /// Capture player name, and price, and complete purchase
     fn auction(&self, player: &Player, square: &Square) {
         println!("Auction!!");
-        let owner_idx = dialog::get_player_idx(self, player);
+        let owner_idx = dialog::get_player_idx(self, Some(player));
         let purchase_price = dialog::get_purchase_price(square);
 
         let mut owner = self.players.get(owner_idx).expect("Player should exist")
@@ -353,16 +433,34 @@ impl Game {
         cards.push(card);
     }
 
-    /// Purchase the property
-    fn buy_property(&self, player: &mut Player, square: &Square, price: u32) {
-        if player.cash > (price as i32) {
-            println!("You buy it for ${}", price);
-            player.transact_cash(-1 * (price as i32));
-            square.asset.owner.replace(Some(player.turn_idx));
-        } else {
-            println!("Not enough money. You'll have to auction it");
-            self.auction(player, square);
+    /// Sell property to another player
+    fn sell_property(&self, orig_owner: &mut Player, new_owner: &mut Player,
+                     square: &Square, price: u32) {
+
+        if new_owner.cash < price {
+            println!("{} has insufficient funds", &new_owner.name);
+            return;
         }
+
+        // new_owner has enough cash
+        println!("{} sells {} to {} for ${}",
+                 orig_owner.name, square.name, new_owner.name, price);
+        orig_owner.transact_cash(price as i32);
+        new_owner.transact_cash(-1 * (price as i32));
+        square.asset.owner.replace(Some(new_owner.turn_idx));
+    }
+
+    /// Purchase the property
+    fn buy_property(&self, new_owner: &mut Player, square: &Square, price: u32) {
+        // buying from scratch
+        if new_owner.cash < price {
+            println!("You do not have enouch cash. You'll have to auction it");
+            self.auction(new_owner, square);
+            return;
+        }
+        println!("You buy {} for ${}", square.name, price);
+        new_owner.transact_cash(-1 * (price as i32));
+        square.asset.owner.replace(Some(new_owner.turn_idx));
     }
 
     fn execute_square_property(&self, player: &mut Player, square: &Square,
@@ -495,8 +593,18 @@ impl Player {
 
     /// Transact in cash.
     // Adds `amount` to players cash amount. Also works for negative numbers
-    pub fn transact_cash(&mut self, amount: i32) {
-        self.cash += amount;
+    pub fn transact_cash(&mut self, amount: i32) -> Result<(), ()> {
+        if amount < 0 {
+            let a = amount.abs() as u32;
+            if self.cash < a {
+                return Err(());
+            }
+            self.cash -= a;
+        } else {
+            let a = amount as u32;
+            self.cash += a;
+        }
+        Ok(())
     }
 }
 
@@ -920,6 +1028,27 @@ mod tests {
         g.execute_turn(&mut p, 3); // Mongul moves to Pennsylvania Railroad
         assert_eq!(p.cash, 1090); // bought street
         assert_eq!(s.asset.owner.get().unwrap(), p.turn_idx);
+    }
+
+    #[test]
+    fn sell_a_property() {
+        let mut g = init(vec!["Seller".to_string(), "NewOwner".to_string()]);
+        g.set_unit_test();
+        let s = g.board.get(3).unwrap();
+        assert_eq!(s.asset.owner.get(), None);
+
+        let mut seller = g.players.get(0).unwrap().borrow_mut();
+        assert_eq!(seller.cash, 1500);
+        
+        g.execute_turn(&mut seller, 3); // Seller moves to Baltic Avenue
+        assert_eq!(seller.cash, 1440); // bought street
+        assert_eq!(s.asset.owner.get().unwrap(), seller.turn_idx);
+
+        let mut owner = g.players.get(1).unwrap().borrow_mut();
+        g.sell_property(&mut seller, &mut owner, &s, 20);
+        assert_eq!(owner.cash, 1480);
+        assert_eq!(seller.cash, 1460);
+        assert_eq!(s.asset.owner.get().unwrap(), owner.turn_idx);
     }
 
     #[test]

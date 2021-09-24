@@ -15,14 +15,14 @@ pub enum UserAction {
 }
 
 /// Print actions a player can make outside of their turn
-pub fn additional_user_actions(game: &Game) -> UserAction {
+pub fn additional_user_actions() -> UserAction {
     println!("1. Sell street to another player");
     println!("2. Buy house (coming soon)");
     println!("3. Sell house (coming soon)");
     println!("4. Buy hotel (coming soon)");
     println!("5. Sell hotel (coming soon)");
-    println!("6. Mortgage street (coming soon)");
-    println!("7. Unmortgage street (coming soon)");
+    println!("6. Mortgage street");
+    println!("7. Unmortgage street");
     println!("0. End turn");
     loop {
         print!("Select a valid option: ");
@@ -132,10 +132,11 @@ pub fn get_player_idx(game: &Game, player: Option<&Player>, msg: &str) -> usize 
     // Do not print current player
     let mut valid_options = Vec::<usize>::new();
     for i in 0..game.players.len() {
-        if player != None && i == player.unwrap().turn_idx {
-            continue;
+        match player {
+            None  => {},
+            Some(p) => if p.turn_idx == i { continue; }
         }
-        valid_options.push(i);
+        valid_options.push(i+1);
         println!("{}: {}", i+1, game.players.get(i).unwrap().borrow().name);
     }
 
@@ -179,7 +180,7 @@ pub fn get_purchase_price(square: &Square) -> u32 {
         match io::stdin().read_line(&mut user_input) {
             Ok(_) => {
                 user_input.pop(); // Remove newline
-                let player_no = match user_input.parse::<u32>() {
+                match user_input.parse::<u32>() {
                     Ok(n) => return n,
                     Err(_) => {
                         println!("Invalid input. Try again");
@@ -195,17 +196,19 @@ pub fn get_purchase_price(square: &Square) -> u32 {
 }
 
 /// Get the street name from user, and return the index on the board where the street is
-pub fn get_street(game: &Game, owner: &Player) -> usize {
-    let eligible_streets :Vec<(usize, &Square)> = game.board.iter().enumerate()
-        .filter(|(i, s)| { match s.asset.owner.get() {
-                None => false,
-                Some(u) => u == owner.turn_idx
-            }
-        })
-        .collect();
+pub fn get_street(eligible_streets: Vec<(usize, &Square)>) -> usize {
+    // TODO: Return error if there are no eligible streets
     loop { // repeat until player enters a valid selection
         for (i, s) in eligible_streets.iter().enumerate() {
-            println!("{}. {}", i+1, s.1.name);
+            let title = format!("{}. {}", i+1, s.1.name);
+            let extra: String;
+            let sd = s.1.get_street_details()
+                      .expect("owned streets doesn't have details");
+            let extra = match s.1.asset.borrow().is_mortgaged() {
+                true  => format!("unmortgage for ${}", sd.get_unmortgage_amount()),
+                false => format!("mortgage for ${}", sd.mortgage),
+            };
+            println!("{} ({})", title, &extra);
         }
         print!("Enter the street: ");
         let _= io::stdout().flush();
@@ -239,7 +242,7 @@ pub fn get_amount() -> u32 {
         match io::stdin().read_line(&mut user_input) {
             Ok(_) => {
                 user_input.pop(); // Remove newline
-                let player_no = match user_input.parse::<u32>() {
+                match user_input.parse::<u32>() {
                     Ok(n) => return n,
                     Err(_) => {
                         println!("Invalid input. Try again");

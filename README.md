@@ -24,12 +24,12 @@ Monopoly clone, to help visually impaired keep track of resourcesG
 - [x] Player is charged rent for streets if player owns all streets
 - [x] Player can choose to auction street (if applicable)
 - [x] Player can sell street to another player
+- [x] Player can mortgage street
+- [x] Player can unmortgage street
 - [ ] Player can buy house (calculates applicable streets)
 - [ ] Player is charged rent for streets for x number of houses
 - [ ] Player can buy hotel (calculates applicable streets)
 - [ ] Player is charged rent for streets for hotel
-- [ ] Player can mortgage street
-- [ ] Player can unmortgage street
 - [ ] Player must use 2 dice
 - [ ] 3 double rolls sends player to jail
 - [ ] while in jail, a double roll frees player

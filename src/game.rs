@@ -27,17 +27,10 @@ pub enum SquareType {
     Utility
 }
 
-#[derive(Eq, PartialEq, Clone, Copy, Debug)]
-pub enum Suburb {
-    Brown,
-    Blue,
-    Pink, 
-    Orange,
-    Red,
-    Yellow,
-    Green,
-    Indigo,
-    NA
+#[derive(Eq, PartialEq, Debug)]
+pub struct Suburb { // Name and building price (per building)
+    pub color: String,
+    building_price: u32
 }
 
 pub struct Asset {
@@ -74,13 +67,12 @@ pub struct Player {
 }
 
 
-#[derive(Clone, Copy)]
 pub struct StreetDetails {
-    pub suburb: Suburb,
+    pub suburb: Option<Suburb>,
     pub price: u32,
     pub rent: u32,
-    pub rent_suburb: u32,
-    pub mortgage: u32
+    pub rent_suburb: [u32; 6], // suburb, house 1..4, hotel
+    pub mortgage: u32,
 }
 
 pub struct Square {
@@ -110,6 +102,47 @@ impl Asset {
 
     pub fn unmortgage(&mut self) {
         self.is_mortgaged = false;
+    }
+
+    pub fn house_num(&self) -> u32 {
+        self.house_num
+    }
+
+    pub fn has_hotel(&self) -> bool {
+        self.has_hotel
+    }
+
+    pub fn buy_house(&mut self) -> Result<(), String> {
+        match self.house_num < 4 {
+            true => self.house_num += 1,
+            false => {
+                return Err(String::from("This street cannot have more houses"));
+
+            }
+        }
+        Ok(())
+    }
+
+    pub fn sell_house(&mut self) -> Result<(), ()> {
+        // validate street can sell house
+        Err(())
+    }
+
+    pub fn buy_hotel(&mut self) -> Result<(), String> {
+        if self.has_hotel() {
+            return Err(String::from("This street cannot have more hotels"));
+        }
+        if self.house_num != 4 {
+            return Err(String::from("You need 4 houses before you can buy a hotel"));
+        }
+        self.has_hotel = true;
+
+        Ok(())
+    }
+
+    pub fn sell_hotel(&mut self) {
+        // street can always sell hotel
+        self.has_hotel = false;
     }
 }
 
@@ -205,16 +238,133 @@ impl Game {
                                          street_idx, purchase_price);
                 },
                 dialog::UserAction::BuyHouse => {
-                    println!(" :( Not yet implemented");
+                    let player_idx = match dialog::get_player_idx(
+                            self, None, "Select the owner") {
+                        Ok(s)  => s,
+                        Err(_) => {
+                            println!("Back to the menu");
+                            continue;
+                        }
+                    };
+
+                    let mut owner = self.players.get(player_idx)
+                                        .unwrap().borrow_mut();
+
+                    let eligible_streets :Vec<(usize, &Square)> = 
+                            self.board.iter().enumerate()
+                        .filter(|(_, s)| { match s.asset.borrow().owner {
+                                None => false,
+                                Some(u) => u == owner.turn_idx
+                            }
+                        })
+                        .filter(|(_, s)| s.asset.borrow().house_num() < 4 )
+                        .collect();
+                    let street_idx = match dialog::get_street(eligible_streets) {
+                        Ok(s)  => s,
+                        Err(_) => {
+                            println!("Back to the menu");
+                            continue;
+                        }
+                    };
+
+                    actions::buy_house(&self, &mut owner, street_idx);
                 },
                 dialog::UserAction::SellHouse => {
-                    println!(" :( Not yet implemented");
+                    let player_idx = match dialog::get_player_idx(
+                            self, None, "Select the owner") {
+                        Ok(s)  => s,
+                        Err(_) => {
+                            println!("Back to the menu");
+                            continue;
+                        }
+                    };
+
+                    let mut owner = self.players.get(player_idx)
+                                        .unwrap().borrow_mut();
+
+                    let eligible_streets :Vec<(usize, &Square)> = 
+                            self.board.iter().enumerate()
+                        .filter(|(_, s)| { match s.asset.borrow().owner {
+                                None => false,
+                                Some(o) => o == owner.turn_idx
+                            }
+                        })
+                        .filter(|(_, s)| s.asset.borrow().house_num() > 0 )
+                        .filter(|(_, s)| !s.asset.borrow().has_hotel())
+                        .collect();
+                    let street_idx = match dialog::get_street(eligible_streets) {
+                        Ok(s)  => s,
+                        Err(_) => {
+                            println!("Back to the menu");
+                            continue;
+                        }
+                    };
+
+                    actions::sell_house(&self, &mut owner, street_idx);
                 },
                 dialog::UserAction::BuyHotel => {
-                    println!(" :( Not yet implemented");
-                }
+                    let player_idx = match dialog::get_player_idx(
+                            self, None, "Select the owner") {
+                        Ok(s)  => s,
+                        Err(_) => {
+                            println!("Back to the menu");
+                            continue;
+                        }
+                    };
+
+                    let mut owner = self.players.get(player_idx)
+                                        .unwrap().borrow_mut();
+
+                    let eligible_streets :Vec<(usize, &Square)> = 
+                            self.board.iter().enumerate()
+                        .filter(|(_, s)| { match s.asset.borrow().owner {
+                                None => false,
+                                Some(u) => u == owner.turn_idx
+                            }
+                        })
+                        .filter(|(_, s)| s.asset.borrow().house_num() == 4)
+                        .collect();
+                    let street_idx = match dialog::get_street(eligible_streets) {
+                        Ok(s)  => s,
+                        Err(_) => {
+                            println!("Back to the menu");
+                            continue;
+                        }
+                    };
+
+                    actions::buy_hotel(&self, &mut owner, street_idx);
+                },
                 dialog::UserAction::SellHotel => {
-                    println!(" :( Not yet implemented");
+                    let player_idx = match dialog::get_player_idx(
+                            self, None, "Select the owner") {
+                        Ok(s)  => s,
+                        Err(_) => {
+                            println!("Back to the menu");
+                            continue;
+                        }
+                    };
+
+                    let mut owner = self.players.get(player_idx)
+                                        .unwrap().borrow_mut();
+
+                    let eligible_streets :Vec<(usize, &Square)> = 
+                            self.board.iter().enumerate()
+                        .filter(|(_, s)| { match s.asset.borrow().owner {
+                                None => false,
+                                Some(u) => u == owner.turn_idx
+                            }
+                        })
+                        .filter(|(_, s)| s.asset.borrow().has_hotel())
+                        .collect();
+                    let street_idx = match dialog::get_street(eligible_streets) {
+                        Ok(s)  => s,
+                        Err(_) => {
+                            println!("Back to the menu");
+                            continue;
+                        }
+                    };
+
+                    actions::sell_hotel(&self, &mut owner, street_idx);
                 },
                 dialog::UserAction::Mortgage => {
                     let player_idx = match dialog::get_player_idx(
@@ -371,15 +521,13 @@ impl Game {
     }
 
     /// Get all squares owned by a player
-    fn get_player_owned_squares(&self, player_idx: usize) -> Vec<Square> {
-        let mut squares = Vec::<Square>::new();
+    fn get_player_owned_squares(&self, player_idx: usize) -> Vec<&Square> {
+        let mut squares = Vec::<&Square>::new();
         for s in self.board.iter() {
             match s.asset.borrow().owner {
                 Some(owner_idx) => {
                     if owner_idx == player_idx {
-                        squares.push(
-                            Square::new(&s.name.to_string(), s.square_type,
-                                        s.street_details));
+                        squares.push(&s);
                     }
                 },
                 None => {}
@@ -409,7 +557,7 @@ impl Game {
         let rent: u32 = match s.square_type {
             SquareType::Utility => {
                 let owned_squares = self.get_player_owned_squares(owner);
-                let utility_num = owned_squares.iter()
+                let utility_num = owned_squares.into_iter()
                     .filter(|&x| x.square_type == SquareType::Utility)
                     .collect::<Vec<&Square>>().len();
                 let utility_num = utility_num as u32;
@@ -422,7 +570,7 @@ impl Game {
             SquareType::Station => {
                 // See how many stations user has
                 let owned_squares = self.get_player_owned_squares(owner);
-                let station_num = owned_squares.iter()
+                let station_num = owned_squares.into_iter()
                     .filter(|&x| x.square_type == SquareType::Station)
                     .collect::<Vec<&Square>>().len();
                 let station_num = station_num as u32;
@@ -436,32 +584,24 @@ impl Game {
                 }
             },
             SquareType::Street => {
-                let owned_squares = self.get_player_owned_squares(owner);
-                let street_details = s.street_details.expect("Details expected");
-                let street_suburb = street_details.suburb;
-                let suburb_total = self.board.iter()
-                    .filter(|&x| { 
-                        match x.street_details {
-                            None => false,
-                            Some(d) => d.suburb == street_suburb
-                        }})
-                    .collect::<Vec<&Square>>().len();
-                let suburb_owned = owned_squares.iter()
-                    .filter(|&x| { 
-                        match x.street_details {
-                            None => false,
-                            Some(d) => d.suburb == street_suburb
-                        }})
-                    .collect::<Vec<&Square>>().len();
-
-                // println!("Street: {}", self.name);
-                // println!("suburb: {}", street_suburb);
-                // println!("suburb owned: {}", suburb_owned);
-                // println!("suburb total: {}", suburb_total);
-
-                match suburb_total == suburb_owned {
-                    true => street_details.rent_suburb,
-                    false => street_details.rent
+                let street_details = s.get_street_details().expect("Details expected");
+                if !self.player_owns_suburb(owner, s) {
+                    return Some(street_details.rent);
+                }
+                let a = s.asset.borrow();
+                if a.has_hotel() {
+                    return Some(street_details.rent_suburb[5]);
+                }
+                match a.house_num() {
+                    0 | 1 | 2 | 3 | 4 => {
+                        let idx = a.house_num() as usize;
+                        street_details.rent_suburb[idx]
+                    },
+                    _ => {
+                        // Panic!
+                        println!("Oops! Error in calculating rent");
+                        0
+                    }
                 }
             }
             _ => 0
@@ -472,6 +612,7 @@ impl Game {
     /// Actions on corner squares
     fn execute_square_corner(&self, player: &mut Player, square: &Square) {
         if player.position == 30 {
+            println!("GO TO JAIL!");
             player.go_to_jail();
         } else {
             println!("{}", square.name);
@@ -493,6 +634,7 @@ impl Game {
     }
 
     fn execute_square_community(&self, player: &mut Player) {
+        println!("COMMUNITY CHEST!");
         let mut cards = self.community_cards.borrow_mut();
         let card = cards.remove(0);
         self.execute_card(player, &card);
@@ -500,6 +642,7 @@ impl Game {
     }
 
     fn execute_square_chance(&self, player: &mut Player) {
+        println!("CHANCE!");
         let mut cards = self.chance_cards.borrow_mut();
         let card = cards.remove(0);
         self.execute_card(player, &card);
@@ -598,11 +741,117 @@ impl Game {
             SquareType::ChanceCard    => self.execute_square_chance(player)
         }
     }
+
+    /// Calculate if a player owns all streets in the suburb
+    fn player_owns_suburb(&self, player_idx: usize, street: &Square) -> bool {
+        match street.asset.borrow().owner {
+            None    => return false, // nobody own this street
+            Some(o) => {
+                if o != player_idx {
+                    return false; // player doesn't own this street
+                }
+            }
+        };
+
+        let suburb = street.get_street_details().unwrap().get_suburb();
+        let streets_missing = self.board.iter()
+            .filter(|s| match s.get_street_details() {
+                    Some(sd) => sd.get_suburb() == suburb,
+                    None => false
+                })
+            .filter(|s| match s.asset.borrow().owner {
+                    Some(o) => o != player_idx, // others own this
+                    None    => true // nobody owns this
+                })
+            .collect::<Vec<&Square>>()
+            .len();
+
+        // player owns all, if none are unowned or owned by others
+        streets_missing == 0
+    }
+
+    /// Can this street have another property, relative to other streets in the suburb
+    fn street_eligible_for_house(&self, street: &Square) -> bool {
+        let street_details = street.get_street_details().unwrap();
+        let suburb = street_details.get_suburb();
+        let asset = street.asset.borrow();
+        let building_num = asset.house_num();
+
+        // current building num cannot be > 1 of lowest number of buildings on street
+        // ie, if we're building house no 2, all other streets must have at least 1 house
+        self.board.iter()
+            .filter(|s| s.name != street.name) // ignore own street
+            .filter(|s| match s.get_street_details() {
+                    Some(sd) => sd.get_suburb() == suburb,
+                    None => false
+                })
+            // if any street has less houses, cannot buy house
+            .fold(true, |acc, s| { 
+                acc && building_num <= s.asset.borrow().house_num
+            })
+    }
+
+    /// Can this street have its property sold
+    fn street_eligible_for_house_sale(&self, street: &Square) -> bool {
+        let street_details = street.get_street_details().unwrap();
+        let suburb = street_details.get_suburb();
+        let asset = street.asset.borrow();
+        let building_num = asset.house_num();
+
+        // current building num cannot be > 1 of lowest number of buildings on street
+        // ie, if we're building house no 2, all other streets must have at least 1 house
+        self.board.iter()
+            .filter(|s| s.name != street.name) // ignore own street
+            .filter(|s| match s.get_street_details() {
+                    Some(sd) => sd.get_suburb() == suburb,
+                    None => false
+                })
+            // if any street has more houses, cannot sell house
+            .fold(true, |acc, s| { 
+                acc && building_num >= s.asset.borrow().house_num
+            })
+    }
+
+    /// All streets must have 4 houses or a hotel
+    fn street_eligible_for_hotel(&self, street: &Square) -> bool {
+        let street_details = street.get_street_details().unwrap();
+        let suburb = street_details.get_suburb();
+        let asset = street.asset.borrow();
+        let building_num = asset.house_num();
+
+        // all streets in suburb must have 4 houses or a hotel
+        self.board.iter()
+            .filter(|s| s.name != street.name) // ignore own street
+            .filter(|s| match s.get_street_details() {
+                    Some(sd) => sd.get_suburb() == suburb,
+                    None => false
+                })
+            .fold(true, |acc, s| { 
+                let a = s.asset.borrow();
+                acc && (a.has_hotel || a.house_num == 4 )
+            })
+    }
 }
 
 impl StreetDetails {
-    fn new(suburb: Suburb, price: u32, rent: u32, rent_suburb: u32,
+    fn new(color: char, price: u32, rent: u32, rent_suburb: [u32; 6],
            mortgage: u32) -> Self {
+
+        // Create a suburb based on the street
+        // TODO: this can be more elegant, with the Street details referencing suburbs.
+
+        let suburb = match color {
+            'B' => Some(Suburb::new("Brown", 50)),
+            'L' => Some(Suburb::new("Blue", 50)),
+            'P' => Some(Suburb::new("Pink", 100)), 
+            'O' => Some(Suburb::new("Orange", 100)),
+            'R' => Some(Suburb::new("Red", 150)),
+            'Y' => Some(Suburb::new("Yellow", 150)),
+            'G' => Some(Suburb::new("Green", 200)),
+            'I' => Some(Suburb::new("Indigo", 200)),
+            _   => None
+        };
+
         Self {
             suburb,
             price,
@@ -615,6 +864,19 @@ impl StreetDetails {
     /// Calculate unmortgage amount
     pub fn get_unmortgage_amount(&self) -> u32 {
         (1.1 * (self.mortgage as f32)).round() as u32
+    }
+
+    pub fn get_suburb(&self) -> Option<&Suburb> {
+        self.suburb.as_ref()
+    }
+}
+
+impl Suburb {
+    fn new(color: &str, building_price: u32) -> Self {
+        Self {
+            color: color.to_string(),
+            building_price
+        }
     }
 }
 
@@ -634,8 +896,8 @@ impl Square {
         }
     }
 
-    pub fn get_street_details(&self) -> Option<StreetDetails> {
-        self.street_details
+    pub fn get_street_details(&self) -> Option<&StreetDetails> {
+        self.street_details.as_ref()
     }
 
     /// Get purchase price of the street
@@ -643,7 +905,8 @@ impl Square {
         match self.square_type {
             SquareType::Station => 200,
             SquareType::Utility => 150,
-            SquareType::Street  => self.street_details.expect("Details should exist").price,
+            SquareType::Street  => self.get_street_details()
+                    .expect("Details should exist").price,
                 _ => 0 // Error, should never happen
         }
     }
@@ -672,7 +935,6 @@ impl Player {
     /// Go to jail
     // Player doesn't collect 200, and goes straight to jail
     pub fn go_to_jail(&mut self) {
-        println!("GO TO JAIL!");
         self.is_in_jail = true;
         self.position = 10;
     }
@@ -795,72 +1057,94 @@ fn load_squares() -> [Square; BOARD_SIZE as usize] {
     [
         Square::new("Just chillin' at the start", SquareType::Corner, None),
         Square::new("Mediterranean Avenue", SquareType::Street, 
-            Some(StreetDetails::new(Suburb::Brown, 60, 2, 4, 30))),
+            Some(StreetDetails::new(
+                    'B', 60, 2, [4, 10, 30, 90, 160, 250], 30))),
         Square::new("Community Chest", SquareType::CommunityCard, None),
         Square::new("Baltic Avenue", SquareType::Street, 
-            Some(StreetDetails::new(Suburb::Brown, 60, 4, 8, 30))),
+            Some(StreetDetails::new(
+                    'B', 60, 4, [8, 20, 60, 180, 320, 450], 30))),
         Square::new("Income Tax", SquareType::Tax, None),
         Square::new("Reading Railroad", SquareType::Station,
-            Some(StreetDetails::new(Suburb::NA, 200, 0, 0, 100))),
+            Some(StreetDetails::new('N', 200, 0, [0,0,0,0,0,0], 100))),
         Square::new("Oriental Avenue", SquareType::Street, 
-            Some(StreetDetails::new(Suburb::Blue, 100, 6, 12, 50))),
+            Some(StreetDetails::new(
+                    'L', 100, 6, [12, 30, 90, 270, 400, 550], 50))),
         Square::new("Chance", SquareType::ChanceCard, None),
         Square::new("Vermont Avenue", SquareType::Street, 
-            Some(StreetDetails::new(Suburb::Blue, 100, 6, 12, 50))),
+            Some(StreetDetails::new(
+                    'L', 100, 6, [12, 30, 90, 270, 440, 550], 50))),
         Square::new("Connecticut Avenue", SquareType::Street, 
-            Some(StreetDetails::new(Suburb::Blue, 120, 8, 16, 60))),
+            Some(StreetDetails::new(
+                    'L', 120, 8, [16, 40, 100, 300, 450, 600], 60))),
         Square::new("Visiting Jail", SquareType::Corner, None),
         Square::new("St. Charles Place", SquareType::Street, 
-            Some(StreetDetails::new(Suburb::Pink, 140, 10, 20, 70))),
+            Some(StreetDetails::new(
+                    'P', 140, 10, [20, 50, 150, 450, 625, 750], 70))),
         Square::new("Electric Company", SquareType::Utility,
-            Some(StreetDetails::new(Suburb::NA, 150, 0, 0, 75))),
+            Some(StreetDetails::new('N', 150, 0, [0,0,0,0,0,0], 75))),
         Square::new("States Avenue", SquareType::Street, 
-            Some(StreetDetails::new(Suburb::Pink, 140, 10, 20, 70))),
+            Some(StreetDetails::new(
+                    'P', 140, 10, [20, 50,150, 450, 625, 750], 70))),
         Square::new("Virginia Avenue", SquareType::Street, 
-            Some(StreetDetails::new(Suburb::Pink, 160, 12, 24, 80))),
+            Some(StreetDetails::new(
+                    'P', 160, 12, [24, 60, 180, 500, 700, 900], 80))),
         Square::new("Pennsylvania Railroad", SquareType::Station,
-            Some(StreetDetails::new(Suburb::NA, 200, 0, 0, 100))),
+            Some(StreetDetails::new('N', 200, 0, [0,0,0,0,0,0], 100))),
         Square::new("St. James Place", SquareType::Street, 
-            Some(StreetDetails::new(Suburb::Orange, 180, 14, 28, 90))),
+            Some(StreetDetails::new(
+                    'O', 180, 14, [28, 70, 200, 550, 750, 950], 90))),
         Square::new("Community Chest", SquareType::CommunityCard, None),
         Square::new("Tennessee Avenue", SquareType::Street, 
-            Some(StreetDetails::new(Suburb::Orange, 180, 14, 28, 90))),
+            Some(StreetDetails::new(
+                    'O', 180, 14, [28, 70, 200, 550, 750, 950], 90))),
         Square::new("New York Avenue", SquareType::Street, 
-            Some(StreetDetails::new(Suburb::Orange, 200, 16, 32, 110))),
+            Some(StreetDetails::new(
+                    'O', 200, 16, [32, 80, 220, 600, 800, 1000], 110))),
         Square::new("Yay! Free Parking", SquareType::Corner, None),
         Square::new("Kentucky Avenue", SquareType::Street, 
-            Some(StreetDetails::new(Suburb::Red, 220, 18, 36, 110))),
+            Some(StreetDetails::new(
+                    'R', 220, 18, [36, 90, 250, 700, 875, 1050], 110))),
         Square::new("Chance", SquareType::ChanceCard, None),
         Square::new("Indiana Avenue", SquareType::Street, 
-            Some(StreetDetails::new(Suburb::Red, 220, 18, 36, 110))),
+            Some(StreetDetails::new(
+                    'R', 220, 18, [36, 90, 250, 700, 875, 1050], 110))),
         Square::new("Illinois Avenue", SquareType::Street, 
-            Some(StreetDetails::new(Suburb::Red, 240, 20, 40, 120))),
+            Some(StreetDetails::new(
+                    'R', 240, 20, [40, 100, 300, 750, 925, 1100], 120))),
         Square::new("B. & O. Railroad", SquareType::Station,
-            Some(StreetDetails::new(Suburb::NA, 200, 0, 0, 100))),
+            Some(StreetDetails::new('N', 200, 0, [0,0,0,0,0,0], 100))),
         Square::new("Atlantic Avenue", SquareType::Street, 
-            Some(StreetDetails::new(Suburb::Yellow, 260, 22, 44, 130))),
+            Some(StreetDetails::new(
+                    'Y', 260, 22, [44, 110, 330, 800, 975, 1150], 130))),
         Square::new("Ventnor Avenue", SquareType::Street, 
-            Some(StreetDetails::new(Suburb::Yellow, 260, 22, 44, 130))),
+            Some(StreetDetails::new(
+                    'Y', 260, 22, [44, 110, 330, 800, 975, 1150], 130))),
         Square::new("Water Works", SquareType::Utility,
-            Some(StreetDetails::new(Suburb::NA, 150, 0, 0, 75))),
+            Some(StreetDetails::new('N', 150, 0, [0,0,0,0,0,0], 75))),
         Square::new("Marvin Gardens", SquareType::Street, 
-            Some(StreetDetails::new(Suburb::Yellow, 280, 24, 48, 140))),
+            Some(StreetDetails::new(
+                    'Y', 280, 24, [48, 120, 360, 850, 1025, 1200], 140))),
         Square::new("Go To Jail", SquareType::Corner, None),
         Square::new("Pacific Avenue", SquareType::Street, 
-            Some(StreetDetails::new(Suburb::Green, 300, 26, 52, 150))),
+            Some(StreetDetails::new(
+                    'G', 300, 26, [52, 130, 390, 900, 1100, 1275], 150))),
         Square::new("North Carolina Avenue", SquareType::Street, 
-            Some(StreetDetails::new(Suburb::Green, 300, 26, 52, 150))),
+            Some(StreetDetails::new(
+                    'G', 300, 26, [52, 130, 390, 900, 1100, 1275], 150))),
         Square::new("Community Chest", SquareType::CommunityCard, None),
         Square::new("Pennsylvania Avenue", SquareType::Street, 
-            Some(StreetDetails::new(Suburb::Green, 320, 28, 56, 160))),
+            Some(StreetDetails::new(
+                    'G', 320, 28, [56, 150, 450, 1000, 1200, 1400], 160))),
         Square::new("Short Line", SquareType::Station,
-            Some(StreetDetails::new(Suburb::NA, 200, 0, 0, 100))),
+            Some(StreetDetails::new('N', 200, 0, [0,0,0,0,0,0], 100))),
         Square::new("Chance", SquareType::ChanceCard, None),
         Square::new("Park Place", SquareType::Street, 
-            Some(StreetDetails::new(Suburb::Indigo, 350, 35, 70, 175))),
+            Some(StreetDetails::new(
+                    'I', 350, 35, [70, 175, 500, 1100, 1300, 1500], 175))),
         Square::new("Luxury Tax", SquareType::Tax, None),
         Square::new("Boardwalk", SquareType::Street, 
-            Some(StreetDetails::new(Suburb::Indigo, 400, 50, 100, 200)))
+            Some(StreetDetails::new(
+                    'I', 400, 50, [100, 200, 600, 1400, 1700, 2000], 200)))
     ]
 }
 
@@ -895,7 +1179,7 @@ mod actions {
         let street = game.board.get(street_idx).expect("Street should exist");
         let mut asset = street.asset.borrow_mut();
 
-        owner.transact_cash(street.street_details.unwrap().mortgage as i32);
+        owner.transact_cash(street.get_street_details().unwrap().mortgage as i32);
         asset.mortgage();
     }
 
@@ -906,10 +1190,157 @@ mod actions {
         if !asset.is_mortgaged {
             println!("Street isn't mortgaged");
         } else {
-            let sd = street.street_details.unwrap();
+            let sd = street.get_street_details().unwrap();
             owner.transact_cash(-1 * (sd.get_unmortgage_amount() as i32));
             asset.unmortgage();
         }
+    }
+
+    pub fn buy_house(game: &Game, owner: &mut Player, street_idx: usize) {
+        let street = game.board.get(street_idx).expect("Street should exist");
+        let building_price = match street.get_street_details()
+                    .expect("Details should exist").get_suburb() {
+            None => {
+                println!("You cannot buy a building here");
+                return;
+            },
+            Some(s) => s.building_price
+        };
+        match street.asset.borrow().owner {
+            Some(i) => {
+                if i != owner.turn_idx {
+                    println!("You don't own this street");
+                    return;
+                }
+            },
+            None => {
+                println!("This street is unowned");
+                return;
+            }
+        };
+
+        if owner.cash < building_price {
+            println!("You can't afford to buy a house here");
+            return;
+        }
+
+        // get streets in suburb not owned by player
+        if !game.player_owns_suburb(owner.turn_idx, &street) {
+            println!("You don't own all the streets in the suburb");
+            return;
+        }
+
+        if !game.street_eligible_for_house(&street) {
+            println!("Cannot buy a house here yet. Buy houses on other streets first");
+            return;
+        }
+
+        // Now buy house
+        street.asset.borrow_mut().buy_house();
+        owner.transact_cash(-1 * (building_price as i32));
+    }
+
+    pub fn sell_house(game: &Game, owner: &mut Player, street_idx: usize) {
+        let street = game.board.get(street_idx).expect("Street should exist");
+        let building_price = match street.get_street_details()
+                    .expect("Details should exist").get_suburb() {
+            None => {
+                println!("You cannot sell a building here");
+                return;
+            },
+            Some(s) => s.building_price
+        };
+        match street.asset.borrow().owner {
+            Some(i) => {
+                if i != owner.turn_idx {
+                    println!("You don't own this street");
+                    return;
+                }
+            },
+            None => {
+                println!("This street is unowned");
+                return;
+            }
+        };
+        
+        if !game.street_eligible_for_house_sale(&street) {
+            println!("Cannot sell a house. Sell other houses first");
+            return;
+        }
+        // Player can always sell hotel
+        street.asset.borrow_mut().sell_house();
+        owner.transact_cash(building_price as i32);
+    }
+
+    pub fn buy_hotel(game: &Game, owner: &mut Player, street_idx: usize) {
+        let street = game.board.get(street_idx).expect("Street should exist");
+        let building_price = match street.get_street_details()
+                    .expect("Details should exist").get_suburb() {
+            None => {
+                println!("You cannot buy a building here");
+                return;
+            },
+            Some(s) => s.building_price
+        };
+        match street.asset.borrow().owner {
+            Some(i) => {
+                if i != owner.turn_idx {
+                    println!("You don't own this street");
+                    return;
+                }
+            },
+            None => {
+                println!("This street is unowned");
+                return;
+            }
+        };
+
+        if owner.cash < building_price {
+            println!("You can't afford to buy a hotel here");
+            return;
+        }
+
+        // get streets in suburb not owned by player
+        if !game.player_owns_suburb(owner.turn_idx, &street) {
+            println!("You don't own all the streets in the suburb");
+            return;
+        }
+
+        if !game.street_eligible_for_hotel(&street) {
+            println!("Cannot buy a hotel here yet.");
+            return;
+        }
+
+        // Now buy house
+        street.asset.borrow_mut().buy_hotel();
+        owner.transact_cash(-1 * (building_price as i32));
+    }
+
+    pub fn sell_hotel(game: &Game, owner: &mut Player, street_idx: usize) {
+        let street = game.board.get(street_idx).expect("Street should exist");
+        let building_price = match street.get_street_details()
+                    .expect("Details should exist").get_suburb() {
+            None => {
+                println!("You cannot sell a building here");
+                return;
+            },
+            Some(s) => s.building_price
+        };
+        match street.asset.borrow().owner {
+            Some(i) => {
+                if i != owner.turn_idx {
+                    println!("You don't own this street");
+                    return;
+                }
+            },
+            None => {
+                println!("This street is unowned");
+                return;
+            }
+        };
+        // Player can always sell hotel
+        street.asset.borrow_mut().sell_hotel();
+        owner.transact_cash(building_price as i32);
     }
 }
 
@@ -1041,7 +1472,6 @@ mod tests {
                           "StreetRenter".to_string()]);
         g.set_unit_test();
         let s = g.board.get(3).unwrap();
-        println!(" --- {} : {:?}", s.name, s.asset.borrow().owner);
         assert_eq!(s.asset.borrow().owner, None);
 
         // Buy the following squares:
@@ -1254,12 +1684,233 @@ mod tests {
 
     #[test]
     fn unmortgage_cost_calculation() {
-        assert_eq!(33, StreetDetails::new(Suburb::Brown, 60, 2, 4, 30)
+        assert_eq!(33, StreetDetails::new('B', 60, 2, [4,0,0,0,0,0], 30)
                    .get_unmortgage_amount());
-        assert_eq!(193, StreetDetails::new(Suburb::Brown, 60, 2, 4, 175)
+        assert_eq!(193, StreetDetails::new('B', 60, 2, [4,0,0,0,0,0], 175)
                    .get_unmortgage_amount());
-        assert_eq!(220, StreetDetails::new(Suburb::Brown, 60, 2, 4, 200)
+        assert_eq!(220, StreetDetails::new('B', 60, 2, [4,0,0,0,0,0], 200)
                    .get_unmortgage_amount());
     }
 
+    #[test]
+    fn buy_first_house() {
+        // cannot buy house unless all houses in suburb are owned 
+        let mut g = init(vec!["Tycoon".to_string()]);
+        g.set_unit_test();
+        let street_idx: usize = 1;
+        let s = g.board.get(street_idx).unwrap();
+        assert_eq!(s.asset.borrow().owner, None);
+
+        let mut owner = g.players.get(0).unwrap().borrow_mut();
+        assert_eq!(owner.cash, 1500);
+        
+        g.execute_turn(&mut owner, 1); // Seller moves to Mediterranean Avenue
+        assert_eq!(owner.cash, 1440); // bought street
+        actions::buy_house(&g, &mut owner, street_idx); // whole suburb isn't owned
+        assert_eq!(s.asset.borrow().house_num(), 0);
+
+        g.execute_turn(&mut owner, 2); // Seller moves to Baltic Avenue and buys it
+        assert_eq!(owner.cash, 1380); // bought street
+        actions::buy_house(&g, &mut owner, street_idx); // buy Mediterranean
+        assert_eq!(s.asset.borrow_mut().house_num(), 1);
+        assert_eq!(owner.cash, 1330); // bought house for 50
+
+        // cannot buy second house on mediterranean
+        actions::buy_house(&g, &mut owner, street_idx);
+        assert_eq!(s.asset.borrow_mut().house_num(), 1);
+        assert_eq!(owner.cash, 1330); // bought house for 50
+    }
+
+    #[test]
+    fn buy_houses_then_hotel() {
+        // buy all possible houses for suburb
+        let mut g = init(vec!["Tycoon".to_string()]);
+        g.set_unit_test();
+        let street_idx: usize = 1;
+        let s = g.board.get(street_idx).unwrap();
+        assert_eq!(s.asset.borrow().owner, None);
+        let rs = s.get_street_details().unwrap().rent_suburb;
+
+        let mut owner = g.players.get(0).unwrap().borrow_mut();
+        assert_eq!(owner.cash, 1500);
+        
+        g.execute_turn(&mut owner, 1); // Seller moves to Mediterranean Avenue
+        assert_eq!(owner.cash, 1440); // bought street
+        assert_eq!(g.calculate_rent(s, 3).unwrap(), 2); // rent for Mediterranean w/o suburb
+
+        g.execute_turn(&mut owner, 2); // Seller moves to Baltic Avenue
+        assert_eq!(owner.cash, 1380); // bought street
+        assert_eq!(g.calculate_rent(s, 3).unwrap(), rs[0]); // rent for suburb
+
+        // tycoon now owns all streets, lets iteratively buy houses up to 4
+        for i in 0..4 {
+            // buy another house in Mediterranean then Baltic
+            let street_idx = 1;
+            let s = g.board.get(street_idx).unwrap();
+            actions::buy_house(&g, &mut owner, street_idx);
+            assert_eq!(s.asset.borrow().house_num(), (i+1));
+            let r: u32 = rs[(i+1) as usize];
+            assert_eq!(g.calculate_rent(s, 3).unwrap(), r); // rent for houses
+
+            let street_idx = 3;
+            let s = g.board.get(street_idx).unwrap();
+            actions::buy_house(&g, &mut owner, street_idx);
+            assert_eq!(s.asset.borrow().house_num(), (i+1));
+
+            // not eligible for hotel
+            if s.asset.borrow().house_num() != 4 {
+                assert_eq!(g.street_eligible_for_hotel(&s), false);
+            }
+        }
+
+        // double check, both streets should have 4 houses
+        assert_eq!(g.board.get(1).unwrap().asset.borrow().house_num(), 4);
+        assert_eq!(g.board.get(3).unwrap().asset.borrow().house_num(), 4);
+
+        // buying 5th house fails
+        let street_idx = 1;
+        let s = g.board.get(street_idx).unwrap();
+        actions::buy_house(&g, &mut owner, street_idx);
+        assert_eq!(s.asset.borrow().house_num(), 4);
+        assert_eq!(s.asset.borrow().has_hotel(), false);
+
+        // buying hotel succeeds
+        actions::buy_hotel(&g, &mut owner, street_idx);
+        assert_eq!(s.asset.borrow().house_num(), 4);
+        assert_eq!(s.asset.borrow().has_hotel(), true);
+    }
+
+    #[test]
+    fn buy_hotels_fails() {
+        // buy all possible houses for suburb
+        let mut g = init(vec!["Tycoon".to_string()]);
+        g.set_unit_test();
+        let street_idx: usize = 1;
+        let s = g.board.get(street_idx).unwrap();
+        assert_eq!(s.asset.borrow().owner, None);
+
+        // buy Brown suburb
+        let mut owner = g.players.get(0).unwrap().borrow_mut();
+        g.execute_turn(&mut owner, 1); // Seller moves to Mediterranean Avenue
+
+        // try buy hotel
+        actions::buy_hotel(&g, &mut owner, street_idx);
+        assert_eq!(s.asset.borrow().house_num(), 0);
+        assert_eq!(s.asset.borrow().has_hotel(), false);
+
+        g.execute_turn(&mut owner, 2); // Seller moves to Baltic Avenue
+        // try buy hotel
+        actions::buy_hotel(&g, &mut owner, 3);
+        assert_eq!(s.asset.borrow().house_num(), 0);
+        assert_eq!(s.asset.borrow().has_hotel(), false);
+    }
+
+    #[test]
+    fn buy_then_sell_hotel() {
+        // buy all possible houses for suburb
+        let mut g = init(vec!["Tycoon".to_string()]);
+        g.set_unit_test();
+        let street_idx: usize = 1;
+        let s = g.board.get(street_idx).unwrap();
+
+        let mut owner = g.players.get(0).unwrap().borrow_mut();
+        
+        // buy indigo squares
+        g.execute_turn(&mut owner, 1);
+        g.execute_turn(&mut owner, 2);
+
+        // put houses on all squares
+        for i in 0..4 {
+            // buy another house in Mediterranean then Baltic
+            let street_idx = 1;
+            let s = g.board.get(street_idx).unwrap();
+            actions::buy_house(&g, &mut owner, street_idx);
+
+            let street_idx = 3;
+            let s = g.board.get(street_idx).unwrap();
+            actions::buy_house(&g, &mut owner, street_idx);
+        }
+
+        // double check, both streets should have 4 houses
+        assert_eq!(g.board.get(1).unwrap().asset.borrow().house_num(), 4);
+        assert_eq!(g.board.get(3).unwrap().asset.borrow().house_num(), 4);
+
+        // buying hotels succeeds
+        let street_idx = 1;
+        let s = g.board.get(street_idx).unwrap();
+        actions::buy_hotel(&g, &mut owner, street_idx);
+        assert_eq!(s.asset.borrow().has_hotel(), true);
+        assert_eq!(g.calculate_rent(s, 3).unwrap(), 250);
+
+        let street_idx = 3;
+        let s = g.board.get(street_idx).unwrap();
+        actions::buy_hotel(&g, &mut owner, street_idx);
+        assert_eq!(s.asset.borrow().has_hotel(), true);
+        assert_eq!(g.calculate_rent(s, 3).unwrap(), 450);
+
+        // Selling hotels succeeds
+        actions::sell_hotel(&g, &mut owner, street_idx);
+        assert_eq!(s.asset.borrow().has_hotel(), false);
+        assert_eq!(g.calculate_rent(s, 3).unwrap(), 320);
+
+        let street_idx = 1;
+        let s = g.board.get(street_idx).unwrap();
+        actions::sell_hotel(&g, &mut owner, street_idx);
+        assert_eq!(s.asset.borrow().has_hotel(), false);
+        assert_eq!(g.calculate_rent(s, 3).unwrap(), 160);
+    }
+
+    #[test]
+    fn check_house_eligibility() {
+        // buy all possible houses for suburb
+        let mut g = init(vec!["Tycoon".to_string()]);
+        g.set_unit_test();
+        let street_idx: usize = 1;
+        let s = g.board.get(street_idx).unwrap();
+        assert_eq!(s.asset.borrow().owner, None);
+        let rs = s.get_street_details().unwrap().rent_suburb;
+
+        let mut owner = g.players.get(0).unwrap().borrow_mut();
+        
+        g.execute_turn(&mut owner, 1); // buys mediterranean
+        assert_eq!(g.player_owns_suburb(owner.turn_idx, &s), false);
+        assert_eq!(g.street_eligible_for_house(&s), true);
+        assert_eq!(g.street_eligible_for_hotel(&s), false);
+        let s = g.board.get(3).unwrap();
+        assert_eq!(g.player_owns_suburb(owner.turn_idx, &s), false);
+        assert_eq!(g.street_eligible_for_house(&s), true);
+        assert_eq!(g.street_eligible_for_hotel(&s), false);
+
+        g.execute_turn(&mut owner, 2); // buys Baltic
+        assert_eq!(g.player_owns_suburb(owner.turn_idx, &s), true);
+        assert_eq!(g.street_eligible_for_house(&s), true); // can now have houses
+        assert_eq!(g.street_eligible_for_hotel(&s), false);
+        let s = g.board.get(1).unwrap();
+        assert_eq!(g.player_owns_suburb(owner.turn_idx, &s), true);
+        assert_eq!(g.street_eligible_for_house(&s), true);
+        assert_eq!(g.street_eligible_for_hotel(&s), false);
+
+        // buy house on mediterranean
+        let street_idx = 1;
+        let s = g.board.get(street_idx).unwrap();
+        actions::buy_house(&g, &mut owner, street_idx);
+        assert_eq!(g.street_eligible_for_house(&s), false); // cannot buy 2nd house
+        
+        // buy house on baltic
+        let street_idx = 3;
+        let s = g.board.get(street_idx).unwrap();
+        actions::buy_house(&g, &mut owner, street_idx);
+        
+        // buy second house on mediterranean
+        let street_idx = 1;
+        let s = g.board.get(street_idx).unwrap();
+        assert_eq!(g.street_eligible_for_house(&s), true); // now eligible
+        actions::buy_house(&g, &mut owner, street_idx);
+        assert_eq!(g.street_eligible_for_house_sale(&s), true);
+
+        // cannot sell house on baltic
+        let street_idx = 3;
+        let s = g.board.get(street_idx).unwrap();
+        assert_eq!(g.street_eligible_for_house_sale(&s), false);
+    }
 }

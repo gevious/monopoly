@@ -16,25 +16,47 @@ fn print_summary(game: &Game) {
             .expect("Player is not on the board");
         println!("{} : ${}", p.name, p.cash);
         match p.is_in_jail {
-            true  => println!("\t is IN JAIL, but still has ${}", p.cash),
+            true  => println!("\t is IN JAIL 🚧, but still has ${}", p.cash),
             false => println!("\t is on {} with ${}", occupying_square.name, p.cash) 
         };
         if p.num_get_out_of_jail_cards > 0 {
             println!("\t has {} get-out-of-jail cards", p.num_get_out_of_jail_cards);
         }
         let owned_streets = game.board.iter()
-            .filter(|&x| { match x.asset.borrow().owner {
-                None => false,
-                Some(owner_idx) => owner_idx == p.turn_idx
-            }})
+            .filter(|&x| {
+                match x.asset.borrow().owner {
+                    None => false,
+                    Some(owner_idx) => owner_idx == p.turn_idx
+                }
+            })
             .collect::<Vec<&Square>>();
         match owned_streets.len() {
             0 => println!("\t owns nothing :("),
             _ => {
                 println!("\t owns {} assets:", owned_streets.len());
                 for s in owned_streets.iter() {
-                    println!("\t\t {} ({:?})", s.name,
-                             s.get_street_details().unwrap().suburb);
+                    let mut x = s.name.to_string();
+                    let a = s.asset.borrow();
+                    if a.is_mortgaged() {
+                        x.push_str(" (mortgaged)");
+                    } else if a.has_hotel() {
+                        x.push_str(" (🏨)");
+                    } else if a.house_num() > 0 {
+                        match a.house_num() {
+                            1 => x.push_str(&format!(" ({} 🏠)", a.house_num())),
+                            2 => x.push_str(&format!(" ({} 🏡)", a.house_num())),
+                            3 => x.push_str(&format!(" ({} 🏘️)", a.house_num())),
+                            _ => x.push_str(&format!(" ({} 🏘️)", a.house_num()))
+                        }
+                    }
+                    match s.get_street_details().unwrap().get_suburb() {
+                        Some(s) => {
+                            println!("\t\t {} ({:?})", x, s.color);
+                        },
+                        None => {
+                            println!("\t\t {}", x);
+                        }
+                    }
                 }
             }
         };
@@ -54,7 +76,7 @@ pub fn publish(game: &Game) {
         sb.push_str(&format!("{} : ${}", p.name, p.cash));
         sb.push_str("<ul>");
         match p.is_in_jail {
-            true  => sb.push_str(&format!("<li> is IN JAIL, but still has ${}</li>",
+            true  => sb.push_str(&format!("<li> is IN JAIL 🚧, but still has ${}</li>",
                                           p.cash)),
             false => sb.push_str(&format!("<li>is on {} with ${}</li>",
                                           occupying_square.name, p.cash))
@@ -75,11 +97,27 @@ pub fn publish(game: &Game) {
                 sb.push_str(&format!("<li>owns: <ul>"));
                 for s in owned_streets.iter() {
                     let mut x = s.name.to_string();
-                    if s.asset.borrow().is_mortgaged() {
+                    let a = s.asset.borrow();
+                    if a.is_mortgaged() {
                         x.push_str(" (mortgaged)");
+                    } else if a.has_hotel() {
+                        x.push_str(" (🏨)");
+                    } else if a.house_num() > 0 {
+                        match a.house_num() {
+                            1 => x.push_str(&format!(" ({} 🏠)", a.house_num())),
+                            2 => x.push_str(&format!(" ({} 🏡)", a.house_num())),
+                            3 => x.push_str(&format!(" ({} 🏘️)", a.house_num())),
+                            _ => x.push_str(&format!(" ({} 🏘️)", a.house_num()))
+                        }
                     }
-                    sb.push_str(&format!("<li>{} ({:?})</li>", x,
-                                         s.get_street_details().unwrap().suburb));
+                    match s.get_street_details().unwrap().get_suburb() {
+                        Some(s) => {
+                            sb.push_str(&format!("<li>{} ({:?})</li>", x, s.color));
+                        },
+                        None => {
+                            sb.push_str(&format!("<li>{}</li>", x));
+                        }
+                    }
                 }
                 sb.push_str("</ul></li>");
             }
@@ -88,7 +126,7 @@ pub fn publish(game: &Game) {
     }
 
 
-    let summary = format!("<html><body>{}</body></html>", sb);
+    let summary = format!("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"></head><body>{}</body></html>", sb);
     fs::write(TEMP_FILE, summary);
     upload();
 }

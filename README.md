@@ -29,19 +29,20 @@ Monopoly clone, to help visually impaired keep track of resourcesG
 - [x] Mortgaged properties don't collect rent
 - [x] For dialog selections, press 'q' to go back to main menu
 - [x] Show color set next to houses in summary (and on web page)
-- [ ] If player cannot pay rent (tax etc), enforce selling assets
-- [ ] Player can buy house (calculates applicable streets)
-- [ ] Player is charged rent for streets for x number of houses
-- [ ] Player can buy hotel (calculates applicable streets)
-- [ ] Player is charged rent for streets for hotel
+- [x] Player can buy house (calculates applicable streets)
+- [x] Player is charged rent for streets for x number of houses
+- [x] Player can buy hotel (calculates applicable streets)
+- [x] Player is charged rent for hotel
+- [ ] Check if player can afford house
+- [ ] Confirm with player, before buying building, and publish cost
 - [ ] Player must use 2 dice
 - [ ] 3 double rolls sends player to jail
-- [ ] while in jail, a double roll frees player
 - [ ] while in jail, player has a choice to pay to leave jail
+- [ ] while in jail, a double roll frees player
 - [ ] utility charges player for cumulative double rolls (not just latest roll)
+- [ ] If player cannot pay rent (tax etc), enforce selling assets
 - [ ] Card event: make repairs on houses/hotels
 - [ ] Card event: pay players money for birthday
-- [ ] Player cannot go into negative cash
 
 # S3 upload
 Currently, I hacked the s3 upload to use the AWS CLI. Credentials are stored locally, in the 'monopoly' profile

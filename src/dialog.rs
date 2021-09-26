@@ -17,10 +17,10 @@ pub enum UserAction {
 /// Print actions a player can make outside of their turn
 pub fn additional_user_actions() -> UserAction {
     println!("1. Sell street to another player");
-    println!("2. Buy house (coming soon)");
-    println!("3. Sell house (coming soon)");
-    println!("4. Buy hotel (coming soon)");
-    println!("5. Sell hotel (coming soon)");
+    println!("2. Buy house");
+    println!("3. Sell house");
+    println!("4. Buy hotel");
+    println!("5. Sell hotel");
     println!("6. Mortgage street");
     println!("7. Unmortgage street");
     println!("0. End turn");

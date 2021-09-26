@@ -28,7 +28,7 @@ Monopoly clone, to help visually impaired keep track of resourcesG
 - [x] Player can unmortgage street
 - [x] Mortgaged properties don't collect rent
 - [x] For dialog selections, press 'q' to go back to main menu
-- [ ] Show color set next to houses in summary (and on web page)
+- [x] Show color set next to houses in summary (and on web page)
 - [ ] If player cannot pay rent (tax etc), enforce selling assets
 - [ ] Player can buy house (calculates applicable streets)
 - [ ] Player is charged rent for streets for x number of houses

@@ -33,7 +33,8 @@ fn print_summary(game: &Game) {
             _ => {
                 println!("\t owns {} assets:", owned_streets.len());
                 for s in owned_streets.iter() {
-                    println!("\t\t {}", s.name);
+                    println!("\t\t {} ({:?})", s.name,
+                             s.get_street_details().unwrap().suburb);
                 }
             }
         };
@@ -77,7 +78,8 @@ pub fn publish(game: &Game) {
                     if s.asset.borrow().is_mortgaged() {
                         x.push_str(" (mortgaged)");
                     }
-                    sb.push_str(&format!("<li>{}</li>", x));
+                    sb.push_str(&format!("<li>{} ({:?})</li>", x,
+                                         s.get_street_details().unwrap().suburb));
                 }
                 sb.push_str("</ul></li>");
             }

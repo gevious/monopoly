@@ -27,6 +27,19 @@ pub enum SquareType {
     Utility
 }
 
+#[derive(Eq, PartialEq, Clone, Copy, Debug)]
+pub enum Suburb {
+    Brown,
+    Blue,
+    Pink, 
+    Orange,
+    Red,
+    Yellow,
+    Green,
+    Indigo,
+    NA
+}
+
 pub struct Asset {
     pub owner: Option<usize>, // usize is a reference to a players turn_idx
     house_num: u32,
@@ -54,18 +67,19 @@ pub struct Game {
 pub struct Player {
     pub name: String,
     pub position: usize, // the index of the board square
-    pub turn_idx: usize, // idx in the group of players. need this to match asset
+    pub turn_idx: usize, // idx in the suburb of players. need this to match asset
     pub cash: u32,
     pub is_in_jail: bool,
     pub num_get_out_of_jail_cards: u32,
 }
 
+
 #[derive(Clone, Copy)]
 pub struct StreetDetails {
-    group: char,
+    pub suburb: Suburb,
     pub price: u32,
     pub rent: u32,
-    pub rent_group: u32,
+    pub rent_suburb: u32,
     pub mortgage: u32
 }
 
@@ -424,29 +438,29 @@ impl Game {
             SquareType::Street => {
                 let owned_squares = self.get_player_owned_squares(owner);
                 let street_details = s.street_details.expect("Details expected");
-                let street_group = street_details.group;
-                let group_total = self.board.iter()
+                let street_suburb = street_details.suburb;
+                let suburb_total = self.board.iter()
                     .filter(|&x| { 
                         match x.street_details {
                             None => false,
-                            Some(d) => d.group == street_group
+                            Some(d) => d.suburb == street_suburb
                         }})
                     .collect::<Vec<&Square>>().len();
-                let group_owned = owned_squares.iter()
+                let suburb_owned = owned_squares.iter()
                     .filter(|&x| { 
                         match x.street_details {
                             None => false,
-                            Some(d) => d.group == street_group
+                            Some(d) => d.suburb == street_suburb
                         }})
                     .collect::<Vec<&Square>>().len();
 
                 // println!("Street: {}", self.name);
-                // println!("group: {}", street_group);
-                // println!("group owned: {}", group_owned);
-                // println!("group total: {}", group_total);
+                // println!("suburb: {}", street_suburb);
+                // println!("suburb owned: {}", suburb_owned);
+                // println!("suburb total: {}", suburb_total);
 
-                match group_total == group_owned {
-                    true => street_details.rent_group,
+                match suburb_total == suburb_owned {
+                    true => street_details.rent_suburb,
                     false => street_details.rent
                 }
             }
@@ -587,13 +601,13 @@ impl Game {
 }
 
 impl StreetDetails {
-    fn new(group: char, price: u32, rent: u32, rent_group: u32,
+    fn new(suburb: Suburb, price: u32, rent: u32, rent_suburb: u32,
            mortgage: u32) -> Self {
         Self {
-            group,
+            suburb,
             price,
             rent,
-            rent_group,
+            rent_suburb,
             mortgage
         }
     }
@@ -781,72 +795,72 @@ fn load_squares() -> [Square; BOARD_SIZE as usize] {
     [
         Square::new("Just chillin' at the start", SquareType::Corner, None),
         Square::new("Mediterranean Avenue", SquareType::Street, 
-            Some(StreetDetails::new('A', 60, 2, 4, 30))),
+            Some(StreetDetails::new(Suburb::Brown, 60, 2, 4, 30))),
         Square::new("Community Chest", SquareType::CommunityCard, None),
         Square::new("Baltic Avenue", SquareType::Street, 
-            Some(StreetDetails::new('A', 60, 4, 8, 30))),
+            Some(StreetDetails::new(Suburb::Brown, 60, 4, 8, 30))),
         Square::new("Income Tax", SquareType::Tax, None),
         Square::new("Reading Railroad", SquareType::Station,
-            Some(StreetDetails::new('S', 200, 0, 0, 100))),
+            Some(StreetDetails::new(Suburb::NA, 200, 0, 0, 100))),
         Square::new("Oriental Avenue", SquareType::Street, 
-            Some(StreetDetails::new('B', 100, 6, 12, 50))),
+            Some(StreetDetails::new(Suburb::Blue, 100, 6, 12, 50))),
         Square::new("Chance", SquareType::ChanceCard, None),
         Square::new("Vermont Avenue", SquareType::Street, 
-            Some(StreetDetails::new('B', 100, 6, 12, 50))),
+            Some(StreetDetails::new(Suburb::Blue, 100, 6, 12, 50))),
         Square::new("Connecticut Avenue", SquareType::Street, 
-            Some(StreetDetails::new('B', 120, 8, 16, 60))),
+            Some(StreetDetails::new(Suburb::Blue, 120, 8, 16, 60))),
         Square::new("Visiting Jail", SquareType::Corner, None),
         Square::new("St. Charles Place", SquareType::Street, 
-            Some(StreetDetails::new('C', 140, 10, 20, 70))),
+            Some(StreetDetails::new(Suburb::Pink, 140, 10, 20, 70))),
         Square::new("Electric Company", SquareType::Utility,
-            Some(StreetDetails::new('S', 150, 0, 0, 75))),
+            Some(StreetDetails::new(Suburb::NA, 150, 0, 0, 75))),
         Square::new("States Avenue", SquareType::Street, 
-            Some(StreetDetails::new('C', 140, 10, 20, 70))),
+            Some(StreetDetails::new(Suburb::Pink, 140, 10, 20, 70))),
         Square::new("Virginia Avenue", SquareType::Street, 
-            Some(StreetDetails::new('C', 160, 12, 24, 80))),
+            Some(StreetDetails::new(Suburb::Pink, 160, 12, 24, 80))),
         Square::new("Pennsylvania Railroad", SquareType::Station,
-            Some(StreetDetails::new('S', 200, 0, 0, 100))),
+            Some(StreetDetails::new(Suburb::NA, 200, 0, 0, 100))),
         Square::new("St. James Place", SquareType::Street, 
-            Some(StreetDetails::new('D', 180, 14, 28, 90))),
+            Some(StreetDetails::new(Suburb::Orange, 180, 14, 28, 90))),
         Square::new("Community Chest", SquareType::CommunityCard, None),
         Square::new("Tennessee Avenue", SquareType::Street, 
-            Some(StreetDetails::new('D', 180, 14, 28, 90))),
+            Some(StreetDetails::new(Suburb::Orange, 180, 14, 28, 90))),
         Square::new("New York Avenue", SquareType::Street, 
-            Some(StreetDetails::new('D', 200, 16, 32, 110))),
+            Some(StreetDetails::new(Suburb::Orange, 200, 16, 32, 110))),
         Square::new("Yay! Free Parking", SquareType::Corner, None),
         Square::new("Kentucky Avenue", SquareType::Street, 
-            Some(StreetDetails::new('E', 220, 18, 36, 110))),
+            Some(StreetDetails::new(Suburb::Red, 220, 18, 36, 110))),
         Square::new("Chance", SquareType::ChanceCard, None),
         Square::new("Indiana Avenue", SquareType::Street, 
-            Some(StreetDetails::new('E', 220, 18, 36, 110))),
+            Some(StreetDetails::new(Suburb::Red, 220, 18, 36, 110))),
         Square::new("Illinois Avenue", SquareType::Street, 
-            Some(StreetDetails::new('E', 240, 20, 40, 120))),
+            Some(StreetDetails::new(Suburb::Red, 240, 20, 40, 120))),
         Square::new("B. & O. Railroad", SquareType::Station,
-            Some(StreetDetails::new('S', 200, 0, 0, 100))),
+            Some(StreetDetails::new(Suburb::NA, 200, 0, 0, 100))),
         Square::new("Atlantic Avenue", SquareType::Street, 
-            Some(StreetDetails::new('F', 260, 22, 44, 130))),
+            Some(StreetDetails::new(Suburb::Yellow, 260, 22, 44, 130))),
         Square::new("Ventnor Avenue", SquareType::Street, 
-            Some(StreetDetails::new('F', 260, 22, 44, 130))),
+            Some(StreetDetails::new(Suburb::Yellow, 260, 22, 44, 130))),
         Square::new("Water Works", SquareType::Utility,
-            Some(StreetDetails::new('S', 150, 0, 0, 75))),
+            Some(StreetDetails::new(Suburb::NA, 150, 0, 0, 75))),
         Square::new("Marvin Gardens", SquareType::Street, 
-            Some(StreetDetails::new('F', 280, 24, 48, 140))),
+            Some(StreetDetails::new(Suburb::Yellow, 280, 24, 48, 140))),
         Square::new("Go To Jail", SquareType::Corner, None),
         Square::new("Pacific Avenue", SquareType::Street, 
-            Some(StreetDetails::new('G', 300, 26, 52, 150))),
+            Some(StreetDetails::new(Suburb::Green, 300, 26, 52, 150))),
         Square::new("North Carolina Avenue", SquareType::Street, 
-            Some(StreetDetails::new('G', 300, 26, 52, 150))),
+            Some(StreetDetails::new(Suburb::Green, 300, 26, 52, 150))),
         Square::new("Community Chest", SquareType::CommunityCard, None),
         Square::new("Pennsylvania Avenue", SquareType::Street, 
-            Some(StreetDetails::new('G', 320, 28, 56, 160))),
+            Some(StreetDetails::new(Suburb::Green, 320, 28, 56, 160))),
         Square::new("Short Line", SquareType::Station,
-            Some(StreetDetails::new('S', 200, 0, 0, 100))),
+            Some(StreetDetails::new(Suburb::NA, 200, 0, 0, 100))),
         Square::new("Chance", SquareType::ChanceCard, None),
         Square::new("Park Place", SquareType::Street, 
-            Some(StreetDetails::new('H', 350, 35, 70, 175))),
+            Some(StreetDetails::new(Suburb::Indigo, 350, 35, 70, 175))),
         Square::new("Luxury Tax", SquareType::Tax, None),
         Square::new("Boardwalk", SquareType::Street, 
-            Some(StreetDetails::new('H', 400, 50, 100, 200)))
+            Some(StreetDetails::new(Suburb::Indigo, 400, 50, 100, 200)))
     ]
 }
 
@@ -1240,12 +1254,12 @@ mod tests {
 
     #[test]
     fn unmortgage_cost_calculation() {
-        assert_eq!(33,
-                   StreetDetails::new('A', 60, 2, 4, 30).get_unmortgage_amount());
-        assert_eq!(193,
-                   StreetDetails::new('A', 60, 2, 4, 175).get_unmortgage_amount());
-        assert_eq!(220,
-                   StreetDetails::new('A', 60, 2, 4, 200).get_unmortgage_amount());
+        assert_eq!(33, StreetDetails::new(Suburb::Brown, 60, 2, 4, 30)
+                   .get_unmortgage_amount());
+        assert_eq!(193, StreetDetails::new(Suburb::Brown, 60, 2, 4, 175)
+                   .get_unmortgage_amount());
+        assert_eq!(220, StreetDetails::new(Suburb::Brown, 60, 2, 4, 200)
+                   .get_unmortgage_amount());
     }
 
 }

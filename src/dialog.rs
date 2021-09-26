@@ -115,7 +115,7 @@ pub fn want_to_buy_property(square: &Square) -> bool {
                 user_input.pop(); // Remove newline
                 match user_input.trim() {
                     "Y" | "y" | ""  => return true,
-                    "N" | "n" | "no"  => return true,
+                    "N" | "n" | "no"  => return false,
                     _ => println!("Invalid Input. Try again")
                 }
             },

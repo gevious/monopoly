@@ -26,6 +26,10 @@ Monopoly clone, to help visually impaired keep track of resourcesG
 - [x] Player can sell street to another player
 - [x] Player can mortgage street
 - [x] Player can unmortgage street
+- [x] Mortgaged properties don't collect rent
+- [ ] For dialog selections, press 'q' to go back to main menu
+- [ ] Show color set next to houses in summary (and on web page)
+- [ ] If player cannot pay rent (tax etc), enforce selling assets
 - [ ] Player can buy house (calculates applicable streets)
 - [ ] Player is charged rent for streets for x number of houses
 - [ ] Player can buy hotel (calculates applicable streets)
@@ -38,7 +42,6 @@ Monopoly clone, to help visually impaired keep track of resourcesG
 - [ ] Card event: make repairs on houses/hotels
 - [ ] Card event: pay players money for birthday
 - [ ] Player cannot go into negative cash
-- [ ] If player cannot pay rent, enforce selling assets
 
 # S3 upload
 Currently, I hacked the s3 upload to use the AWS CLI. Credentials are stored locally, in the 'monopoly' profile

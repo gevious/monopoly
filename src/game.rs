@@ -312,6 +312,10 @@ impl Game {
             },
             Some(r) => r
         };
+        if s.asset.borrow().is_mortgaged {
+            println!("Phew! {} is mortgaged, so no rent is due", s.name);
+            return None;
+        };
 
         // Need owner of this square
         // get all squares owner owns of the same type
@@ -926,6 +930,22 @@ mod tests {
         let s = g.board.get(10).unwrap();
         let r = g.calculate_rent(s, 10);
         assert_eq!(r, None);
+    }
+
+    #[test]
+    fn calculate_rent_mortgaged() {
+        let mut g = init(vec!["StreetOwner".to_string()]);
+        g.set_unit_test();
+        let s = g.board.get(3).unwrap();
+        assert_eq!(s.asset.borrow().owner, None);
+
+        let mut p = g.players.get(0).unwrap().borrow_mut();
+        g.execute_turn(&mut p, 3); // Owner moves to Baltic Avenue
+
+        s.asset.borrow_mut().mortgage();
+        assert_eq!(g.calculate_rent(s, 3), None);
+        s.asset.borrow_mut().unmortgage();
+        assert_eq!(g.calculate_rent(s, 3), Some(4));
     }
 
     #[test]

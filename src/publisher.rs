@@ -31,7 +31,7 @@ fn print_summary(game: &Game) {
         match owned_streets.len() {
             0 => println!("\t owns nothing :("),
             _ => {
-                println!("\t owns the following assets:");
+                println!("\t owns {} assets:", owned_streets.len());
                 for s in owned_streets.iter() {
                     println!("\t\t {}", s.name);
                 }

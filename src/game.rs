@@ -138,10 +138,18 @@ impl Game {
             match option {
                 dialog::UserAction::EndTurn => return,
                 dialog::UserAction::SellStreet => {
-                    let mut orig_owner = self.players.get(
-                        dialog::get_player_idx(&self, None,
-                                               "Select the current owner"))
-                                .unwrap().borrow_mut();
+                    let player_idx = match dialog::get_player_idx(
+                            self, None, "Select the current owner") {
+                        Ok(s)  => s,
+                        Err(_) => {
+                            println!("Back to the menu");
+                            continue;
+                        }
+                    };
+
+                    let mut orig_owner = self.players.get(player_idx)
+                                        .unwrap().borrow_mut();
+
                     let eligible_streets :Vec<(usize, &Square)> = 
                             self.board.iter().enumerate()
                         .filter(|(_, s)| { match s.asset.borrow().owner {
@@ -150,13 +158,34 @@ impl Game {
                             }
                         })
                         .collect();
-                    let street_idx = dialog::get_street(eligible_streets);
+                    let street_idx = match dialog::get_street(eligible_streets) {
+                        Ok(s)  => s,
+                        Err(_) => {
+                            println!("Back to the menu");
+                            continue;
+                        }
+                    };
 
-                    let mut new_owner = self.players.get(
-                        dialog::get_player_idx(self, Some(&*orig_owner),
-                                               "Select the new owner"))
-                                .unwrap().borrow_mut();
-                    let purchase_price = dialog::get_amount();
+                    let player_idx = match dialog::get_player_idx(
+                            self, Some(&*orig_owner), "Select the new owner") {
+                        Ok(s)  => s,
+                        Err(_) => {
+                            println!("Back to the menu");
+                            continue;
+                        }
+                    };
+
+                    let mut new_owner = self.players.get(player_idx)
+                                        .unwrap().borrow_mut();
+
+
+                    let purchase_price = match dialog::get_amount() {
+                        Ok(s)  => s,
+                        Err(_) => {
+                            println!("Back to the menu");
+                            continue;
+                        }
+                    };
 
                     actions::sell_street(&self, &mut orig_owner, &mut new_owner,
                                          street_idx, purchase_price);
@@ -174,9 +203,18 @@ impl Game {
                     println!(" :( Not yet implemented");
                 },
                 dialog::UserAction::Mortgage => {
-                    let mut owner = self.players.get(
-                        dialog::get_player_idx(self, None, "Select the current owner"))
-                                .unwrap().borrow_mut();
+                    let player_idx = match dialog::get_player_idx(
+                            self, None, "Select the current owner") {
+                        Ok(s)  => s,
+                        Err(_) => {
+                            println!("Back to the menu");
+                            continue;
+                        }
+                    };
+
+                    let mut owner = self.players.get(player_idx)
+                                        .unwrap().borrow_mut();
+
 
                     let eligible_streets :Vec<(usize, &Square)> = 
                             self.board.iter().enumerate()
@@ -186,13 +224,29 @@ impl Game {
                             }
                         })
                         .collect();
-                    let street_idx = dialog::get_street(eligible_streets);
+                    let street_idx = match dialog::get_street(eligible_streets) {
+                        Ok(s)  => s,
+                        Err(_) => {
+                            println!("Back to the menu");
+                            continue;
+                        }
+                    };
+
                     actions::mortgage_street(&self, &mut owner, street_idx);
                 },
                 dialog::UserAction::Unmortgage => {
-                    let mut owner = self.players.get(
-                        dialog::get_player_idx(self, None, "Select the current owner"))
-                                .unwrap().borrow_mut();
+
+                    let player_idx = match dialog::get_player_idx(
+                            self, None, "Select the current owner") {
+                        Ok(s)  => s,
+                        Err(_) => {
+                            println!("Back to the menu");
+                            continue;
+                        }
+                    };
+
+                    let mut owner = self.players.get(player_idx)
+                                        .unwrap().borrow_mut();
 
                     let eligible_streets :Vec<(usize, &Square)> = self.board.iter().enumerate()
                         .filter(|(_, s)| { match s.asset.borrow().owner {
@@ -202,7 +256,13 @@ impl Game {
                         })
                         .filter(|(_, s)| s.asset.borrow().is_mortgaged )
                         .collect();
-                    let street_idx = dialog::get_street(eligible_streets);
+                    let street_idx = match dialog::get_street(eligible_streets) {
+                        Ok(s)  => s,
+                        Err(_) => {
+                            println!("Back to the menu");
+                            continue;
+                        }
+                    };
 
 
                     actions::unmortgage_street(&self, &mut owner, street_idx);
@@ -221,9 +281,22 @@ impl Game {
     /// Capture player name, and price, and complete purchase
     fn auction(&self, player: &Player, square: &Square) {
         println!("Auction!!");
-        let owner_idx = dialog::get_player_idx(self, Some(player),
-                                               "Select the new owner");
-        let purchase_price = dialog::get_purchase_price(square);
+        let owner_idx = match dialog::get_player_idx(self, Some(player),
+                                                     "Select the new owner") {
+            Ok(o)  => o,
+            Err(_) => {
+                println!("Back to the menu");
+                return;
+            }
+        };
+
+        let purchase_price = match dialog::get_purchase_price(square) {
+            Ok(p) => p,
+            Err(_) => {
+                println!("Back to the menu");
+                return;
+            }
+        };
 
         let mut owner = self.players.get(owner_idx).expect("Player should exist")
                             .borrow_mut();

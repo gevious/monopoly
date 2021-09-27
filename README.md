@@ -33,6 +33,7 @@ Monopoly clone, to help visually impaired keep track of resourcesG
 - [x] Player is charged rent for streets for x number of houses
 - [x] Player can buy hotel (calculates applicable streets)
 - [x] Player is charged rent for hotel
+- [x] Unit test for sell property (ensure house is removed, and money received)
 - [ ] Check if player can afford house
 - [ ] Confirm with player, before buying building, and publish cost
 - [ ] Player must use 2 dice

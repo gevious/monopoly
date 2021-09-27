@@ -14,7 +14,7 @@ fn print_summary(game: &Game) {
         let p = p_ref.borrow();
         let occupying_square = game.board.get(p.position)
             .expect("Player is not on the board");
-        println!("{} : ${}", p.name, p.cash);
+        print!("{} ", p.name);
         match p.is_in_jail {
             true  => println!("\t is IN JAIL 🚧, but still has ${}", p.cash),
             false => println!("\t is on {} with ${}", occupying_square.name, p.cash) 

@@ -114,18 +114,23 @@ impl Asset {
 
     pub fn buy_house(&mut self) -> Result<(), String> {
         match self.house_num < 4 {
-            true => self.house_num += 1,
-            false => {
-                return Err(String::from("This street cannot have more houses"));
-
-            }
+            true => {
+                self.house_num += 1;
+                Ok(())
+            },
+            false => Err(String::from("This street cannot have more houses"))
         }
-        Ok(())
     }
 
-    pub fn sell_house(&mut self) -> Result<(), ()> {
+    pub fn sell_house(&mut self) -> Result<(), String> {
         // validate street can sell house
-        Err(())
+        match self.house_num > 0 {
+            true => { 
+                self.house_num -= 1;
+                Ok(())
+            },
+            false => Err(String::from("This street has no houses"))
+        }
     }
 
     pub fn buy_hotel(&mut self) -> Result<(), String> {
@@ -387,6 +392,7 @@ impl Game {
                                 Some(u) => u == owner.turn_idx
                             }
                         })
+                        .filter(|(_, s)| !s.asset.borrow().is_mortgaged )
                         .collect();
                     let street_idx = match dialog::get_street(eligible_streets) {
                         Ok(s)  => s,
@@ -1719,6 +1725,11 @@ mod tests {
         actions::buy_house(&g, &mut owner, street_idx);
         assert_eq!(s.asset.borrow_mut().house_num(), 1);
         assert_eq!(owner.cash, 1330); // bought house for 50
+
+        // sell house
+        actions::sell_house(&g, &mut owner, street_idx);
+        assert_eq!(s.asset.borrow_mut().house_num(), 0);
+        assert_eq!(owner.cash, 1380); // sell house for 50
     }
 
     #[test]

@@ -34,13 +34,13 @@ Monopoly clone, to help visually impaired keep track of resourcesG
 - [x] Player can buy hotel (calculates applicable streets)
 - [x] Player is charged rent for hotel
 - [x] Unit test for sell property (ensure house is removed, and money received)
+- [x] Player must use 2 dice
+- [x] 3 double rolls sends player to jail
+- [x] while in jail, a double roll frees player
+- [x] while in jail, player has a choice to pay to leave jail
+- [x] utility charges player for cumulative double rolls (not just latest roll)
 - [ ] Check if player can afford house
 - [ ] Confirm with player, before buying building, and publish cost
-- [ ] Player must use 2 dice
-- [ ] 3 double rolls sends player to jail
-- [ ] while in jail, player has a choice to pay to leave jail
-- [ ] while in jail, a double roll frees player
-- [ ] utility charges player for cumulative double rolls (not just latest roll)
 - [ ] If player cannot pay rent (tax etc), enforce selling assets
 - [ ] Card event: make repairs on houses/hotels
 - [ ] Card event: pay players money for birthday

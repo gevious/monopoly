@@ -27,6 +27,13 @@ pub enum SquareType {
     Utility
 }
 
+#[derive(Debug)]
+pub struct Dice {
+    roll: (u32, u32),
+    num_rolls: u32, // number of times user has rolled dice
+    cumulative_sum: u32
+}
+
 #[derive(Eq, PartialEq, Debug)]
 pub struct Suburb { // Name and building price (per building)
     pub color: String,
@@ -162,6 +169,38 @@ impl Card {
     }
 }
 
+impl Dice {
+
+    pub fn new(die1: u32, die2: u32) -> Self {
+        Self {
+            roll: (die1, die2),
+            num_rolls: 1,
+            cumulative_sum: die1 + die2
+        }
+    }
+
+    pub fn total(&self) -> u32 {
+        self.roll.0 + self.roll.1
+    }
+
+    pub fn roll(&self) -> (u32, u32) {
+        self.roll
+    }
+
+    /// Check if its a double, and if so, update inner values
+    pub fn is_double(&self) -> bool {
+        self.roll.0 == self.roll.1
+    }
+
+    /// This dice follows the roll of a dice passed in as a parameter
+    pub fn reroll(&mut self, dice: Dice) {
+        self.roll = dice.roll;
+        self.num_rolls += 1;
+        self.cumulative_sum += dice.roll.0 + dice.roll.1;
+    }
+}
+
+
 impl Game {
 
     /// Start the game
@@ -170,9 +209,30 @@ impl Game {
             for p_ref in self.players.iter() {
                 {
                     let mut player = p_ref.borrow_mut();
-                    print!("\n{}, roll dice: ", player.name);
-                    let dice_roll = dialog::capture_dice_roll();
-                    self.execute_turn(&mut *player, dice_roll);
+                    print!("\n=== {}, Your turn ===", player.name);
+                    self.jail_time(&mut player);
+
+                    print!("\nRoll dice: ");
+                    let mut dice = dialog::capture_dice_roll();
+
+                    while dice.is_double() {
+                        if player.is_in_jail {
+                            println!("YAY, you're released from jail");
+                            player.is_in_jail = false;
+                            break;
+                        }
+
+                        if dice.num_rolls == 3 {
+                            break;
+                        }
+
+                        // rolled a double
+                        println!("A double. Roll again");
+                        let d = dialog::capture_dice_roll();
+                        dice.reroll(d)
+                    }
+
+                    self.execute_turn(&mut *player, dice);
                 }
 
                 // present options of other transactions user can make
@@ -473,6 +533,32 @@ impl Game {
         self.buy_property(&mut *owner, square, purchase_price);
     }
 
+    /// Give player in jail options to get out
+    pub fn jail_time(&self, player: &mut Player) {
+        if !player.is_in_jail {
+            return;
+        }
+        if player.num_get_out_of_jail_cards > 0 {
+            println!("Yay, No More Jail, thanks to your get-out-of-jail-free card");
+            player.num_get_out_of_jail_cards -= 1;
+            player.is_in_jail = false;
+        } else {
+            // pay $50 to be released from jail?
+            if player.cash < 50 {
+                return;
+            }
+            let pay_cash = match self.is_unit_test {
+                true  => true,
+                false => dialog::yes_no(
+                    "Bribe the guards $50 to get out of jail? (Y/n)")
+            };
+            if pay_cash {
+                println!("Yay, No More Jail, since you bribed the guards $50");
+                player.transact_cash(-50);
+                player.is_in_jail = false;
+            }
+        }
+    }
 
     /// Update game state to unit test
     // This mode will eliminate questions to the user that require keyboard input
@@ -488,11 +574,11 @@ impl Game {
                 // calculate the dice number based on square
                 let target = card.square.expect("Target square should exist");
                 let p_pos = player.position as u32;
-                let dice_roll: u32 = match target > p_pos {
-                    true  => target - p_pos,
-                    false => target + BOARD_SIZE - p_pos
+                let dice = match target > p_pos {
+                    true  => Dice::new(target - p_pos, 0),
+                    false => Dice::new(target + BOARD_SIZE - p_pos, 0)
                 };
-                self.execute_turn(player, dice_roll);
+                self.execute_turn(player, dice);
             },
             CardAction::Payment => {
                 player.transact_cash(-1 * card.amount.expect("Amount should exist"));
@@ -507,23 +593,6 @@ impl Game {
                 // TODO: implement others
             }
         }
-    }
-
-    /// Player tries to break out of jail
-    fn break_out_of_jail(&self, player: &mut Player) {
-        if !player.is_in_jail {
-            return;
-        }
-        if player.num_get_out_of_jail_cards > 0 {
-            println!("Yay, No More Jail, thanks to your get-out-of-jail-free card");
-            player.num_get_out_of_jail_cards -= 1;
-            player.is_in_jail = false;
-        } else if player.cash >= 50 {
-            println!("Yay, No More Jail, since you bribed the guards $50");
-            player.transact_cash(-50);
-            player.is_in_jail = false;
-        }
-        // TODO: Implement roll double digits to get out
     }
 
     /// Get all squares owned by a player
@@ -545,7 +614,7 @@ impl Game {
     /// Calculate rent. If the square is unowned, there is no rent
     // Calculate rent, taking into account if a player owns all streets, and the number of
     // properties on the street.
-    pub fn calculate_rent(&self, s: &Square, dice_roll: u32) -> Option<u32> {
+    pub fn calculate_rent(&self, s: &Square, dice: Dice) -> Option<u32> {
         let owner = match s.asset.borrow().owner {
             None => {
                 // Nobody owns this square
@@ -568,8 +637,8 @@ impl Game {
                     .collect::<Vec<&Square>>().len();
                 let utility_num = utility_num as u32;
                 match utility_num {
-                    1 => (dice_roll * 4) as u32,
-                    2 => (dice_roll * 10) as u32,
+                    1 => (dice.cumulative_sum * 4) as u32,
+                    2 => (dice.cumulative_sum * 10) as u32,
                     _ => 0 // Error, no rent
                 }
             },
@@ -688,9 +757,9 @@ impl Game {
     }
 
     fn execute_square_property(&self, player: &mut Player, square: &Square,
-                               dice_roll: u32) {
+                               dice: Dice) {
         println!("You landed on {}", square.name);
-        match self.calculate_rent(square, dice_roll) {
+        match self.calculate_rent(square, dice) {
             None => {
 
                 // For unit tests, purchase automatically, with no auction option
@@ -699,7 +768,9 @@ impl Game {
                     return;
                 }
 
-                match super::dialog::want_to_buy_property(square) {
+                let message = format!("Do you want to buy {} for ${}? (Y/n)",
+                                      square.name, square.get_price());
+                match super::dialog::yes_no(&message) {
                     true => self.buy_property(player, square, square.get_price()),
                     false => self.auction(player, square)
                 }
@@ -724,11 +795,17 @@ impl Game {
     // The turn starts with a player moving. Then, once the player is on the new square,
     // the rules for that new square execute. Lastly, other players may want to execute 
     // transactions
-    fn execute_turn(&self, player: &mut Player, dice_roll: u32) {
-        self.break_out_of_jail(player); // does nothing if player is not in jail
+    fn execute_turn(&self, player: &mut Player, dice: Dice) {
+
+        if dice.num_rolls == 3 {
+            println!("GO TO JAIL");
+            player.go_to_jail();
+            return;
+        }
 
         let old_pos = player.position;
-        player.advance(dice_roll);
+        player.advance(dice.total());
+
         if player.position < old_pos {
             println!("Yay! You pass begin and collect $200");
             player.transact_cash(200);
@@ -740,7 +817,7 @@ impl Game {
             SquareType::Utility |
             SquareType::Station |
             SquareType::Street        => self.execute_square_property(player, &square,
-                                                                      dice_roll),
+                                                                      dice),
             SquareType::Corner        => self.execute_square_corner(player, &square),
             SquareType::Tax           => self.execute_square_tax(player),
             SquareType::CommunityCard => self.execute_square_community(player),
@@ -1155,7 +1232,7 @@ fn load_squares() -> [Square; BOARD_SIZE as usize] {
 }
 
 mod actions {
-    use super::{Game, Player, dialog};
+    use super::{Game, Player};
 
     pub fn sell_street(game: &Game, orig_owner: &mut Player, new_owner: &mut Player,
                        street_idx: usize, purchase_price: u32) {
@@ -1380,7 +1457,7 @@ mod tests {
         let g = init(vec!["Test".to_string()]);
         let mut p = g.players.get(0).unwrap().borrow_mut();
         assert_eq!(p.cash, 1500);
-        g.execute_turn(&mut p, 4); // income tax, $200
+        g.execute_turn(&mut p, Dice::new(4, 0)); // income tax, $200
         assert_eq!(p.cash, 1300);
     }
 
@@ -1391,49 +1468,73 @@ mod tests {
         // advance on top of GO
         let mut p = g.players.get(0).unwrap().borrow_mut();
         assert_eq!(p.cash, 1500);
-        g.execute_turn(&mut p, 10); // visiting jail
-        g.execute_turn(&mut p, 30); // on the go square
+        g.execute_turn(&mut p, Dice::new(10, 0)); // visiting jail
+        g.execute_turn(&mut p, Dice::new(30, 0)); // on the go square
         assert_eq!(p.cash, 1700);
 
         // advance past GO
-        g.execute_turn(&mut p, 20); // free parking
+        g.execute_turn(&mut p, Dice::new(20, 0)); // free parking
         assert_eq!(p.cash, 1700);
-        g.execute_turn(&mut p, 30); // pass go, to visiting jail
+        g.execute_turn(&mut p, Dice::new(30, 0)); // pass go, to visiting jail
         assert_eq!(p.cash, 1900);
     }
 
     #[test]
     fn jail_time() {
-        let g = init(vec!["Test".to_string()]);
+        let mut g = init(vec!["Test".to_string()]);
+        g.set_unit_test(); // skip dialog and pay $50 to be released from jail
 
         // go to jail
         let mut p = g.players.get(0).unwrap().borrow_mut();
         p.num_get_out_of_jail_cards = 1;
         assert_eq!(p.is_in_jail, false);
 
-        g.execute_turn(&mut p, 30);
+        g.execute_turn(&mut p, Dice::new(30, 0));
         assert_eq!(p.position, 10);
         assert_eq!(p.is_in_jail, true);
         assert_eq!(p.cash, 1500);
         assert_eq!(p.num_get_out_of_jail_cards, 1);
 
         // now release, using card
-        g.execute_turn(&mut p, 10);
+        g.jail_time(&mut p);
         assert_eq!(p.num_get_out_of_jail_cards, 0);
         assert_eq!(p.is_in_jail, false);
         assert_eq!(p.cash, 1500);
 
         // back in jail
-        g.execute_turn(&mut p, 10);
-        assert_eq!(p.is_in_jail, true);
-        assert_eq!(p.num_get_out_of_jail_cards, 0);
+       g.execute_turn(&mut p, Dice::new(20, 0));
+       assert_eq!(p.is_in_jail, true);
+       assert_eq!(p.num_get_out_of_jail_cards, 0);
+       assert_eq!(p.cash, 1500);
+
+       // now release, paying $50
+       g.jail_time(&mut p);
+       assert_eq!(p.is_in_jail, false);
+       assert_eq!(p.num_get_out_of_jail_cards, 0);
+       assert_eq!(p.cash, 1450);
+    }
+
+    //#[test]
+    fn three_doubles_in_jail() {
+        // FIXME, this test should run the start function which is where doubles are 
+        // rolled
+        let mut g = init(vec!["Test".to_string()]);
+        g.set_unit_test();
+
+        // go to jail
+        let mut p = g.players.get(0).unwrap().borrow_mut();
+        assert_eq!(p.is_in_jail, false);
         assert_eq!(p.cash, 1500);
 
-        // now release, paying $50
-        g.execute_turn(&mut p, 10);
+        g.execute_turn(&mut p, Dice::new(10, 10));
         assert_eq!(p.is_in_jail, false);
-        assert_eq!(p.num_get_out_of_jail_cards, 0);
-        assert_eq!(p.cash, 1450);
+
+        g.execute_turn(&mut p, Dice::new(6, 6));
+        assert_eq!(p.is_in_jail, false);
+
+        g.execute_turn(&mut p, Dice::new(6, 6));
+        assert_eq!(p.is_in_jail, true);
+        assert_eq!(p.cash, 1500);
     }
 
     #[test]
@@ -1442,17 +1543,17 @@ mod tests {
         g.set_unit_test();
         // Unowned square | No Rent
         let s = g.board.get(1).unwrap();
-        let r = g.calculate_rent(s, 3);
+        let r = g.calculate_rent(s, Dice::new(0, 0));
         assert_eq!(r, None);
         
         // Income tax | No rent
         let s = g.board.get(4).unwrap();
-        let r = g.calculate_rent(s, 4);
+        let r = g.calculate_rent(s, Dice::new(0, 0));
         assert_eq!(r, None);
        
         // no-rent square
         let s = g.board.get(10).unwrap();
-        let r = g.calculate_rent(s, 10);
+        let r = g.calculate_rent(s, Dice::new(0, 0));
         assert_eq!(r, None);
     }
 
@@ -1464,12 +1565,12 @@ mod tests {
         assert_eq!(s.asset.borrow().owner, None);
 
         let mut p = g.players.get(0).unwrap().borrow_mut();
-        g.execute_turn(&mut p, 3); // Owner moves to Baltic Avenue
+        g.execute_turn(&mut p, Dice::new(3, 0)); // Owner moves to Baltic Avenue
 
         s.asset.borrow_mut().mortgage();
-        assert_eq!(g.calculate_rent(s, 3), None);
+        assert_eq!(g.calculate_rent(s, Dice::new(0, 0)), None);
         s.asset.borrow_mut().unmortgage();
-        assert_eq!(g.calculate_rent(s, 3), Some(4));
+        assert_eq!(g.calculate_rent(s, Dice::new(0, 0)), Some(4));
     }
 
     #[test]
@@ -1486,45 +1587,45 @@ mod tests {
         // St. Charles place[11], States Ave[13], Virginia Ave[14] (3 of set of 3)
         // Park Place[37] & Boardwalk[39] (2 of set of 2)
         let mut p = g.players.get(0).unwrap().borrow_mut();
-        g.execute_turn(&mut p, 3); // Owner moves to Baltic Avenue
-        g.execute_turn(&mut p, 3); // Owner moves to Oriental Avenue
-        g.execute_turn(&mut p, 2); // Vermont Avenue
-        g.execute_turn(&mut p, 3); // St. Charles place
-        g.execute_turn(&mut p, 2); // States Ave
-        g.execute_turn(&mut p, 1); // Virginia Ave
-        g.execute_turn(&mut p, 23); // Park place
-        g.execute_turn(&mut p, 2); // Boardwalk
+        g.execute_turn(&mut p, Dice::new(3, 0)); // Owner moves to Baltic Avenue
+        g.execute_turn(&mut p, Dice::new(3, 0)); // Owner moves to Oriental Avenue
+        g.execute_turn(&mut p, Dice::new(2, 0)); // Vermont Avenue
+        g.execute_turn(&mut p, Dice::new(3, 0)); // St. Charles place
+        g.execute_turn(&mut p, Dice::new(2, 0)); // States Ave
+        g.execute_turn(&mut p, Dice::new(1, 0)); // Virginia Ave
+        g.execute_turn(&mut p, Dice::new(23, 0)); // Park place
+        g.execute_turn(&mut p, Dice::new(2, 0)); // Boardwalk
 
         // Rent for 1 of 2 set 
         let s = g.board.get(3).unwrap(); // Baltic
-        let r = g.calculate_rent(s, 3);
+        let r = g.calculate_rent(s, Dice::new(0, 0));
         assert_eq!(r, Some(4));
 
         // Rent for 2 of 3 set 
         let s = g.board.get(6).unwrap(); // Oriental
-        let r = g.calculate_rent(s, 3);
+        let r = g.calculate_rent(s, Dice::new(0, 0));
         assert_eq!(r, Some(6));
         let s = g.board.get(8).unwrap(); // Vermont
-        let r = g.calculate_rent(s, 3);
+        let r = g.calculate_rent(s, Dice::new(0, 0));
         assert_eq!(r, Some(6));
 
         // rent for 3 of 3 set 
         let s = g.board.get(11).unwrap(); // St. Charles 
-        let r = g.calculate_rent(s, 3);
+        let r = g.calculate_rent(s, Dice::new(0, 0));
         assert_eq!(r, Some(20));
         let s = g.board.get(13).unwrap(); // States Ave
-        let r = g.calculate_rent(s, 3);
+        let r = g.calculate_rent(s, Dice::new(0, 0));
         assert_eq!(r, Some(20));
         let s = g.board.get(14).unwrap(); // Virginia Ave
-        let r = g.calculate_rent(s, 3);
+        let r = g.calculate_rent(s, Dice::new(0, 0));
         assert_eq!(r, Some(24));
         
         // rent for 2 of 2 set 
         let s = g.board.get(37).unwrap(); // Park Ave
-        let r = g.calculate_rent(s, 3);
+        let r = g.calculate_rent(s, Dice::new(0, 0));
         assert_eq!(r, Some(70));
         let s = g.board.get(39).unwrap(); // Boardwalk
-        let r = g.calculate_rent(s, 3);
+        let r = g.calculate_rent(s, Dice::new(0, 0));
         assert_eq!(r, Some(100));
     }
 
@@ -1535,15 +1636,21 @@ mod tests {
         g.set_unit_test();
 
         let mut p = g.players.get(0).unwrap().borrow_mut();
-        g.execute_turn(&mut p, 12); // Electric
+        g.execute_turn(&mut p, Dice::new(12, 0)); // Electric
         let s = g.board.get(12).unwrap(); // Electric
-        let r = g.calculate_rent(s, 3);
-        assert_eq!(r, Some(12)); 
+        let r = g.calculate_rent(s, Dice::new(1, 2));
+        assert_eq!(r, Some(12));  // 3 * 4
 
-        g.execute_turn(&mut p, 16); // Water
-        let s = g.board.get(28).unwrap(); // Electric
-        let r = g.calculate_rent(s, 3);
-        assert_eq!(r, Some(30)); 
+        g.execute_turn(&mut p, Dice::new(16, 0)); // Water
+        let s = g.board.get(28).unwrap();
+        let r = g.calculate_rent(s, Dice::new(3, 0));
+        assert_eq!(r, Some(30)); // 3 * 10
+
+        // cumulative roll
+        let mut dice = Dice::new(3, 0);
+        dice.reroll(Dice::new(6, 0)); // cumulative sum is 9
+        let r = g.calculate_rent(s, dice);
+        assert_eq!(r, Some(90)); // 9 * 10
     }
 
     #[test]
@@ -1554,24 +1661,24 @@ mod tests {
         g.set_unit_test();
 
         let mut p = g.players.get(0).unwrap().borrow_mut();
-        g.execute_turn(&mut p, 5); // Reading Railroad
+        g.execute_turn(&mut p, Dice::new(5, 0)); // Reading Railroad
         let s = g.board.get(5).unwrap();
-        let r = g.calculate_rent(s, 3);
+        let r = g.calculate_rent(s, Dice::new(0, 0));
         assert_eq!(r, Some(25)); 
 
-        g.execute_turn(&mut p, 10); // Pennsylvania Railroad
+        g.execute_turn(&mut p, Dice::new(10, 0)); // Pennsylvania Railroad
         let s = g.board.get(5).unwrap();
-        let r = g.calculate_rent(s, 3);
+        let r = g.calculate_rent(s, Dice::new(0, 0));
         assert_eq!(r, Some(50)); 
 
-        g.execute_turn(&mut p, 10); // B.O. Railroad
+        g.execute_turn(&mut p, Dice::new(10, 0)); // B.O. Railroad
         let s = g.board.get(5).unwrap();
-        let r = g.calculate_rent(s, 3);
+        let r = g.calculate_rent(s, Dice::new(0, 0));
         assert_eq!(r, Some(100)); 
 
-        g.execute_turn(&mut p, 10); // Short line
+        g.execute_turn(&mut p, Dice::new(10, 0)); // Short line
         let s = g.board.get(5).unwrap();
-        let r = g.calculate_rent(s, 3);
+        let r = g.calculate_rent(s, Dice::new(0, 0));
         assert_eq!(r, Some(200)); 
     }
 
@@ -1585,13 +1692,13 @@ mod tests {
         { // change scope so we can release owner when renter moves
             let mut owner = g.players.get(0).unwrap().borrow_mut();
             assert_eq!(owner.cash, 1500);
-            g.execute_turn(&mut owner, 3); // Owner moves to Baltic Avenue
+            g.execute_turn(&mut owner, Dice::new(3, 0)); // Owner moves to Baltic Avenue
             assert_eq!(owner.cash, 1440); // bought street
             assert_eq!(s.asset.borrow().owner.unwrap(), owner.turn_idx);
         }
 
         let mut renter = g.players.get(1).unwrap().borrow_mut();
-        g.execute_turn(&mut renter, 3); // Renter on Baltic Ave
+        g.execute_turn(&mut renter, Dice::new(3, 0)); // Renter on Baltic Ave
         assert_eq!(renter.cash, 1496);
         let owner = g.players.get(0).unwrap().borrow_mut();
         assert_eq!(owner.cash, 1444);
@@ -1607,15 +1714,15 @@ mod tests {
         let mut p = g.players.get(0).unwrap().borrow_mut();
         assert_eq!(p.cash, 1500);
         
-        g.execute_turn(&mut p, 3); // Mongul moves to Baltic Avenue
+        g.execute_turn(&mut p, Dice::new(3, 0)); // Mongul moves to Baltic Avenue
         assert_eq!(p.cash, 1440); // bought street
         assert_eq!(s.asset.borrow().owner.unwrap(), p.turn_idx);
 
-        g.execute_turn(&mut p, 9); // Mongul moves to Electric Company
+        g.execute_turn(&mut p, Dice::new(9, 0)); // Mongul moves to Electric Company
         assert_eq!(p.cash, 1290); // bought street
         assert_eq!(s.asset.borrow().owner.unwrap(), p.turn_idx);
 
-        g.execute_turn(&mut p, 3); // Mongul moves to Pennsylvania Railroad
+        g.execute_turn(&mut p, Dice::new(3, 0)); // Mongul moves to Pennsylvania Railroad
         assert_eq!(p.cash, 1090); // bought street
         assert_eq!(s.asset.borrow().owner.unwrap(), p.turn_idx);
     }
@@ -1630,7 +1737,7 @@ mod tests {
         let mut seller = g.players.get(0).unwrap().borrow_mut();
         assert_eq!(seller.cash, 1500);
         
-        g.execute_turn(&mut seller, 3); // Seller moves to Baltic Avenue
+        g.execute_turn(&mut seller, Dice::new(3, 0)); // Seller moves to Baltic Avenue
         assert_eq!(seller.cash, 1440); // bought street
         assert_eq!(s.asset.borrow().owner.unwrap(), seller.turn_idx);
 
@@ -1652,7 +1759,7 @@ mod tests {
         let mut owner = g.players.get(0).unwrap().borrow_mut();
         assert_eq!(owner.cash, 1500);
         
-        g.execute_turn(&mut owner, 3); // Seller moves to Baltic Avenue
+        g.execute_turn(&mut owner, Dice::new(3, 0)); // Seller moves to Baltic Avenue
         assert_eq!(owner.cash, 1440); // bought street
         assert_eq!(s.asset.borrow().owner.unwrap(), owner.turn_idx);
 
@@ -1710,12 +1817,12 @@ mod tests {
         let mut owner = g.players.get(0).unwrap().borrow_mut();
         assert_eq!(owner.cash, 1500);
         
-        g.execute_turn(&mut owner, 1); // Seller moves to Mediterranean Avenue
+        g.execute_turn(&mut owner, Dice::new(1, 0)); // Seller moves to Mediterranean Avenue
         assert_eq!(owner.cash, 1440); // bought street
         actions::buy_house(&g, &mut owner, street_idx); // whole suburb isn't owned
         assert_eq!(s.asset.borrow().house_num(), 0);
 
-        g.execute_turn(&mut owner, 2); // Seller moves to Baltic Avenue and buys it
+        g.execute_turn(&mut owner, Dice::new(2, 0)); // Seller moves to Baltic Avenue and buys it
         assert_eq!(owner.cash, 1380); // bought street
         actions::buy_house(&g, &mut owner, street_idx); // buy Mediterranean
         assert_eq!(s.asset.borrow_mut().house_num(), 1);
@@ -1745,13 +1852,15 @@ mod tests {
         let mut owner = g.players.get(0).unwrap().borrow_mut();
         assert_eq!(owner.cash, 1500);
         
-        g.execute_turn(&mut owner, 1); // Seller moves to Mediterranean Avenue
+        g.execute_turn(&mut owner, Dice::new(1, 0)); // Seller moves to Mediterranean Avenue
         assert_eq!(owner.cash, 1440); // bought street
-        assert_eq!(g.calculate_rent(s, 3).unwrap(), 2); // rent for Mediterranean w/o suburb
+        assert_eq!(g.calculate_rent(s, Dice::new(3, 0)).unwrap(),
+                   2); // rent for Mediterranean w/o suburb
 
-        g.execute_turn(&mut owner, 2); // Seller moves to Baltic Avenue
+        g.execute_turn(&mut owner, Dice::new(2, 0)); // Seller moves to Baltic Avenue
         assert_eq!(owner.cash, 1380); // bought street
-        assert_eq!(g.calculate_rent(s, 3).unwrap(), rs[0]); // rent for suburb
+        assert_eq!(g.calculate_rent(s, Dice::new(3, 0)).unwrap(),
+                   rs[0]); // rent for suburb
 
         // tycoon now owns all streets, lets iteratively buy houses up to 4
         for i in 0..4 {
@@ -1761,7 +1870,8 @@ mod tests {
             actions::buy_house(&g, &mut owner, street_idx);
             assert_eq!(s.asset.borrow().house_num(), (i+1));
             let r: u32 = rs[(i+1) as usize];
-            assert_eq!(g.calculate_rent(s, 3).unwrap(), r); // rent for houses
+            assert_eq!(g.calculate_rent(s, Dice::new(3, 0)).unwrap(),
+                       r); // rent for houses
 
             let street_idx = 3;
             let s = g.board.get(street_idx).unwrap();
@@ -1802,14 +1912,14 @@ mod tests {
 
         // buy Brown suburb
         let mut owner = g.players.get(0).unwrap().borrow_mut();
-        g.execute_turn(&mut owner, 1); // Seller moves to Mediterranean Avenue
+        g.execute_turn(&mut owner, Dice::new(1, 0)); // Seller moves to Mediterranean Avenue
 
         // try buy hotel
         actions::buy_hotel(&g, &mut owner, street_idx);
         assert_eq!(s.asset.borrow().house_num(), 0);
         assert_eq!(s.asset.borrow().has_hotel(), false);
 
-        g.execute_turn(&mut owner, 2); // Seller moves to Baltic Avenue
+        g.execute_turn(&mut owner, Dice::new(2, 0)); // Seller moves to Baltic Avenue
         // try buy hotel
         actions::buy_hotel(&g, &mut owner, 3);
         assert_eq!(s.asset.borrow().house_num(), 0);
@@ -1827,8 +1937,8 @@ mod tests {
         let mut owner = g.players.get(0).unwrap().borrow_mut();
         
         // buy indigo squares
-        g.execute_turn(&mut owner, 1);
-        g.execute_turn(&mut owner, 2);
+        g.execute_turn(&mut owner, Dice::new(1, 0));
+        g.execute_turn(&mut owner, Dice::new(2, 0));
 
         // put houses on all squares
         for i in 0..4 {
@@ -1851,24 +1961,24 @@ mod tests {
         let s = g.board.get(street_idx).unwrap();
         actions::buy_hotel(&g, &mut owner, street_idx);
         assert_eq!(s.asset.borrow().has_hotel(), true);
-        assert_eq!(g.calculate_rent(s, 3).unwrap(), 250);
+        assert_eq!(g.calculate_rent(s, Dice::new(3, 0)).unwrap(), 250);
 
         let street_idx = 3;
         let s = g.board.get(street_idx).unwrap();
         actions::buy_hotel(&g, &mut owner, street_idx);
         assert_eq!(s.asset.borrow().has_hotel(), true);
-        assert_eq!(g.calculate_rent(s, 3).unwrap(), 450);
+        assert_eq!(g.calculate_rent(s, Dice::new(3, 0)).unwrap(), 450);
 
         // Selling hotels succeeds
         actions::sell_hotel(&g, &mut owner, street_idx);
         assert_eq!(s.asset.borrow().has_hotel(), false);
-        assert_eq!(g.calculate_rent(s, 3).unwrap(), 320);
+        assert_eq!(g.calculate_rent(s, Dice::new(3, 0)).unwrap(), 320);
 
         let street_idx = 1;
         let s = g.board.get(street_idx).unwrap();
         actions::sell_hotel(&g, &mut owner, street_idx);
         assert_eq!(s.asset.borrow().has_hotel(), false);
-        assert_eq!(g.calculate_rent(s, 3).unwrap(), 160);
+        assert_eq!(g.calculate_rent(s, Dice::new(3, 0)).unwrap(), 160);
     }
 
     #[test]
@@ -1883,7 +1993,7 @@ mod tests {
 
         let mut owner = g.players.get(0).unwrap().borrow_mut();
         
-        g.execute_turn(&mut owner, 1); // buys mediterranean
+        g.execute_turn(&mut owner, Dice::new(1, 0)); // buys mediterranean
         assert_eq!(g.player_owns_suburb(owner.turn_idx, &s), false);
         assert_eq!(g.street_eligible_for_house(&s), true);
         assert_eq!(g.street_eligible_for_hotel(&s), false);
@@ -1892,7 +2002,7 @@ mod tests {
         assert_eq!(g.street_eligible_for_house(&s), true);
         assert_eq!(g.street_eligible_for_hotel(&s), false);
 
-        g.execute_turn(&mut owner, 2); // buys Baltic
+        g.execute_turn(&mut owner, Dice::new(2, 0)); // buys Baltic
         assert_eq!(g.player_owns_suburb(owner.turn_idx, &s), true);
         assert_eq!(g.street_eligible_for_house(&s), true); // can now have houses
         assert_eq!(g.street_eligible_for_hotel(&s), false);
@@ -1923,5 +2033,26 @@ mod tests {
         let street_idx = 3;
         let s = g.board.get(street_idx).unwrap();
         assert_eq!(g.street_eligible_for_house_sale(&s), false);
+    }
+
+    #[test]
+    fn roll_dice() {
+        let mut dice = Dice::new(2, 3);
+        assert_eq!(dice.roll, (2,3)); 
+        assert_eq!(dice.num_rolls, 1);
+        assert_eq!(dice.cumulative_sum, 5);
+        assert_eq!(dice.is_double(), false);
+
+        let mut dice = Dice::new(3, 3);
+        assert_eq!(dice.roll, (3,3)); 
+        assert_eq!(dice.num_rolls, 1);
+        assert_eq!(dice.cumulative_sum, 6);
+        assert_eq!(dice.is_double(), true);
+
+        dice.reroll(Dice::new(5, 2));
+        assert_eq!(dice.roll, (5, 2)); 
+        assert_eq!(dice.num_rolls, 2);
+        assert_eq!(dice.cumulative_sum, 13);
+        assert_eq!(dice.is_double(), false);
     }
 }

@@ -1,7 +1,7 @@
 use std::io;
 use std::io::{Write};
 
-use super::game::{Game, Player, Square};
+use super::game::{Game, Dice, Player, Square};
 
 pub enum UserAction {
     BuyHouse,
@@ -65,19 +65,20 @@ pub fn additional_user_actions() -> UserAction {
 }
 
 /// Capture the roll of the dice
-pub fn capture_dice_roll() -> u32 {
+pub fn capture_dice_roll() -> Dice {
     loop {
         let _= io::stdout().flush();
         let mut user_input = String::new();
-        io::stdin().read_line(&mut user_input).expect("Did not enter a valid number");
+        io::stdin().read_line(&mut user_input).expect("Did not enter valid numbers");
         user_input.pop(); // Remove newline
 
+        // split 
         match get_dice_roll(user_input) {
-            Some(roll) => {
-                return roll;
+            Some(d) => {
+                return Dice::new(d.0, d.1);
             },
             None       => {
-                println!("Enter a number between 2 and 12");
+                println!("Enter 2 numbers between 1 and 6");
                 continue;
             }
         };
@@ -87,27 +88,34 @@ pub fn capture_dice_roll() -> u32 {
 /// Get the dice roll from the user
 // This method gets a user input, validates its a number, and the number is within range
 // of 2 dice (ie between 2 and 12)
-fn get_dice_roll(user_input: String) -> Option<u32> {
-    // Convert to number
-    let dice_roll = match user_input.parse::<u32>() {
-        Ok(d) => d,
-        Err(_e) => {
-            return None;
-        }
-    };
-    match dice_roll {
-        2..=12 => Some(dice_roll),
-        _ => {
-            None
-        }
+fn get_dice_roll(user_input: String) -> Option<(u32, u32)> {
+    // Split by whitespace, and convert each to a number
+
+    let dice: Vec<&str> = user_input.split_whitespace().collect();
+    if dice.len() != 2 {
+        return None;
     }
+
+    let mut roll = dice.iter()
+                       // get string to u32, and throw out invalid inputs
+                       .map(|x| x.parse::<u32>())
+                       .filter(|x| x.is_ok())
+                       .map(|x| x.unwrap())
+                       // validate the u32 number is between 1 and 6
+                       .filter(|x| x >= &1 && x <= &6)
+                       .collect::<Vec<u32>>();
+    if roll.len() != 2 {
+        return None;
+    }
+    let last = roll.pop().unwrap();
+    Some((roll.pop().unwrap(), last))
 }
 
 
 /// Capture yes/no answer from the user
-pub fn want_to_buy_property(square: &Square) -> bool {
+pub fn yes_no(message: &str) -> bool {
     loop {
-        println!("Do you want to buy {} for ${}? (Y/n)", square.name, square.get_price());
+        println!("{}", message);
         let _= io::stdout().flush();
         let mut user_input = String::new();
         match io::stdin().read_line(&mut user_input) {
@@ -301,8 +309,13 @@ mod tests {
         assert_eq!(get_dice_roll("Yo".to_string()), None);
         assert_eq!(get_dice_roll("2.3".to_string()), None);
         assert_eq!(get_dice_roll("1".to_string()), None);
-        assert_eq!(get_dice_roll("2".to_string()), Some(2));
-        assert_eq!(get_dice_roll("12".to_string()), Some(12));
         assert_eq!(get_dice_roll("13".to_string()), None);
+        assert_eq!(get_dice_roll("a 4".to_string()), None);
+        assert_eq!(get_dice_roll("0 4".to_string()), None);
+        assert_eq!(get_dice_roll("7 4".to_string()), None);
+        
+        assert_eq!(get_dice_roll("1 1".to_string()), Some(Dice::new(1, 1).roll()));
+        assert_eq!(get_dice_roll("6 6".to_string()), Some(Dice::new(6, 6).roll()));
+        assert_eq!(get_dice_roll("3 4".to_string()), Some(Dice::new(3, 4).roll()));
     }
 }

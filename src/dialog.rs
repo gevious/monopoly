@@ -1,7 +1,9 @@
 use std::io;
 use std::io::{Write};
 
-use super::game::{Game, Dice, Player, Square};
+use super::game::{Game, Dice};
+use super::square::Square;
+use super::player::Player;
 
 pub enum UserAction {
     BuyHouse,
@@ -143,10 +145,10 @@ pub fn get_player_idx(game: &Game, player: Option<&Player>, msg: &str)
     for i in 0..game.players.len() {
         match player {
             None  => {},
-            Some(p) => if p.turn_idx == i { continue; }
+            Some(p) => if p.turn_idx() == i { continue; }
         }
         valid_options.push(i+1);
-        println!("{}: {}", i+1, game.players.get(i).unwrap().borrow().name);
+        println!("{}: {}", i+1, game.players.get(i).unwrap().borrow().name());
     }
     println!("q: Quit, and return to the menu");
 
@@ -188,7 +190,7 @@ pub fn get_player_idx(game: &Game, player: Option<&Player>, msg: &str)
 /// Capture purchase price for property from the user
 pub fn get_purchase_price(square: &Square) -> Result<u32, ()> {
     loop { // repeat until player enters a valid selection
-        print!("Enter the purchase price for {}: ", square.name);
+        print!("Enter the purchase price for {}: ", square.name());
         let _= io::stdout().flush();
         let mut user_input = String::new();
         match io::stdin().read_line(&mut user_input) {
@@ -220,13 +222,13 @@ pub fn get_street(eligible_streets: Vec<(usize, &Square)>) -> Result<usize, ()> 
     }
     loop { // repeat until player enters a valid selection
         for (i, s) in eligible_streets.iter().enumerate() {
-            let title = format!("{}. {}", i+1, s.1.name);
+            let title = format!("{}. {}", i+1, s.1.name());
             let extra: String;
             let sd = s.1.get_street_details()
                       .expect("owned streets doesn't have details");
             let extra = match s.1.asset.borrow().is_mortgaged() {
                 true  => format!("unmortgage for ${}", sd.get_unmortgage_amount()),
-                false => format!("mortgage for ${}", sd.mortgage),
+                false => format!("mortgage for ${}", sd.mortgage()),
             };
             println!("{} ({})", title, &extra);
         }

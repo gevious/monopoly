@@ -2,9 +2,12 @@ use std::io;
 use std::io::{Write};
 use std::convert::TryInto;
 
-mod game;
 mod dialog;
+mod card;
+mod game;
+mod player;
 mod publisher;
+mod square;
 
 /// Get the number of players
 fn get_player_num(user_input: String) -> Result<i32, ()> {

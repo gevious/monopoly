@@ -1,6 +1,11 @@
 # monopoly
 Monopoly clone, to help visually impaired keep track of resourcesG
 
+# Getting Started
+- clone the repo
+- run `cargo test` to build and run unit tests
+- run `cargo run` to start the game
+
 # Roadmap 
 - [x] Infinite loop asking for dice roll
 - [x] Entering num players, and record name of each player

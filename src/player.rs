@@ -13,6 +13,8 @@ pub struct Player {
     cash: u32,
     is_in_jail: bool,
     num_get_out_of_jail_cards: u32,
+    is_in_trouble: bool, // true if player cannot pay bills, and needs to sell
+    left_game: bool // true if player has left the game
 }
 
 impl Asset {
@@ -87,6 +89,10 @@ impl Asset {
     pub fn has_buildings(&self) -> bool {
         self.has_hotel() || self.house_num() > 0
     }
+
+    pub fn liquify(&mut self) {
+        self.owner = None;
+    }
 }
 
 impl Player {
@@ -97,6 +103,8 @@ impl Player {
             turn_idx: idx,
             cash: 1500, // 2x500, 4x100, 1x50, 1x20, 2x10, 1x5, 5x1
             is_in_jail: false,
+            is_in_trouble: false,
+            left_game: false,
             num_get_out_of_jail_cards: 0,
         }
     }
@@ -128,10 +136,25 @@ impl Player {
         self.is_in_jail
     }
 
+    pub fn is_in_trouble(&self) -> bool {
+        self.is_in_trouble
+    }
+    
+    pub fn left_game(&self) -> bool {
+        self.left_game
+    }
+
     pub fn num_get_out_of_jail_cards(&self) -> u32 {
         self.num_get_out_of_jail_cards
     }
 
+    pub fn set_in_trouble(&mut self, in_trouble: bool) {
+        self.is_in_trouble = in_trouble;
+    }
+    
+    pub fn leave_game(&mut self) {
+        self.left_game = true;
+    }
 
     /// Advance player
     // Move player to next square
@@ -203,5 +226,12 @@ mod tests {
         assert_eq!(p.position, 37);
         p.advance(5, 40); // wrap around BOARD_SIZE (=40)
         assert_eq!(p.position, 2);
+    }
+
+    fn check_bankrupt() {
+        let ref mut p = Player::new("Test".to_string(), 1);
+        assert_eq!(p.transact_cash(500), Ok(()));
+        assert_eq!(p.transact_cash(1000), Ok(()));
+        assert_eq!(p.transact_cash(1), Err(()));
     }
 }

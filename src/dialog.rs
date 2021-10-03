@@ -13,7 +13,8 @@ pub enum UserAction {
     Mortgage,
     Unmortgage,
     SellStreet,
-    EndTurn
+    EndTurn,
+    EndGame
 }
 
 /// Print actions a player can make outside of their turn
@@ -56,6 +57,38 @@ pub fn additional_user_actions() -> UserAction {
                     "7" => {
                         return UserAction::Unmortgage;
                     },
+                    _  => println!("Invalid option. Try again")
+                }
+            },
+            Err(_) => {
+                println!("Invalid Input. Try again");
+            }
+        }
+    }
+}
+
+/// Print options a player has that lacks cash to continue
+pub fn trouble_user_actions() -> UserAction {
+    println!("1. Sell street to another player");
+    println!("2. Sell house");
+    println!("3. Sell hotel");
+    println!("4. Mortgage street");
+    println!("5. Continue");
+    println!("0. QUIT (LEAVE GAME)");
+    loop {
+        print!("Select a valid option: ");
+        let _= io::stdout().flush();
+        let mut user_input = String::new();
+        match io::stdin().read_line(&mut user_input) {
+            Ok(_) => {
+                user_input.pop(); // Remove newline
+                match user_input.trim() {
+                    "1" => { return UserAction::SellStreet; },
+                    "2" => { return UserAction::SellHouse; },
+                    "3" => { return UserAction::SellHotel; },
+                    "4" => { return UserAction::Mortgage; },
+                    "5" => { return UserAction::EndTurn; },
+                    "0" => { return UserAction::EndGame; },
                     _  => println!("Invalid option. Try again")
                 }
             },

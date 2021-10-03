@@ -44,9 +44,10 @@ Monopoly clone, to help visually impaired keep track of resourcesG
 - [x] while in jail, a double roll frees player
 - [x] while in jail, player has a choice to pay to leave jail
 - [x] utility charges player for cumulative double rolls (not just latest roll)
-- [ ] Check if player can afford house
-- [ ] Confirm with player, before buying building, and publish cost
-- [ ] If player cannot pay rent (tax etc), enforce selling assets
+- [x] Check if player can afford house
+- [x] Confirm with player, before buying building, and publish cost
+- [x] If player cannot pay rent (tax etc), enforce selling assets
+- [ ] Remove player from game loop if player leaves the game
 - [ ] Card event: make repairs on houses/hotels
 - [ ] Card event: pay players money for birthday
 

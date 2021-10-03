@@ -142,6 +142,4 @@ fn upload() {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
 }

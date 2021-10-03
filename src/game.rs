@@ -10,22 +10,22 @@ const BOARD_SIZE: u32 = 40; // 40 squares on the board
 mod actions {
     use super::Game;
     use super::player::Player;
+    use super::dialog;
 
     pub fn sell_street(game: &Game, orig_owner: &mut Player, new_owner: &mut Player,
                        street_idx: usize, purchase_price: u32) {
-        println!("Sell {} to {} for ${}",
-                 street_idx, new_owner.name(), purchase_price);
-
         let square = game.board.get(street_idx)
                          .expect("Street should exist");
-        let asset = square.asset.borrow();
-        if asset.has_buildings() {
-            println!("The street has buildings. Sell them first");
-            return;
-        }
-        if new_owner.cash() < purchase_price {
-            println!("{} cannot afford the street", new_owner.name());
-            return;
+        {
+            let asset = square.asset.borrow();
+            if asset.has_buildings() {
+                println!("The street has buildings. Sell them first");
+                return;
+            }
+            if new_owner.cash() < purchase_price {
+                println!("{} cannot afford the street", new_owner.name());
+                return;
+            }
         }
 
         game.sell_property(&mut *orig_owner, &mut *new_owner,
@@ -97,9 +97,23 @@ mod actions {
             return;
         }
 
-        // Now buy house
-        street.asset.borrow_mut().buy_house();
-        owner.transact_cash(-1 * (building_price as i32));
+        // buy immediately for unit test
+        if game.is_unit_test {
+            street.asset.borrow_mut().buy_house();
+            owner.transact_cash(-1 * (building_price as i32));
+            return;
+        }
+
+        let msg = format!("Confirm: Buy a house on {} for ${}?",
+                          street.name(), building_price);
+        match dialog::yes_no(&msg) {
+            false => {}, // do nothing
+            yes => {
+                // Now buy house
+                street.asset.borrow_mut().buy_house();
+                owner.transact_cash(-1 * (building_price as i32));
+            }
+        };
     }
 
     pub fn sell_house(game: &Game, owner: &mut Player, street_idx: usize) {
@@ -173,9 +187,24 @@ mod actions {
             return;
         }
 
-        // Now buy house
-        street.asset.borrow_mut().buy_hotel();
-        owner.transact_cash(-1 * (building_price as i32));
+        let msg = format!("Confirm: Buy a hotel on {} for ${}?",
+                          street.name(), building_price);
+
+        // buy immediately for unit test
+        if game.is_unit_test {
+            street.asset.borrow_mut().buy_hotel();
+            owner.transact_cash(-1 * (building_price as i32));
+            return;
+        }
+
+        match dialog::yes_no(&msg) {
+            false => {}, // do nothing
+            yes => {
+                // Now buy hotel
+                street.asset.borrow_mut().buy_hotel();
+                owner.transact_cash(-1 * (building_price as i32));
+            }
+        };
     }
 
     pub fn sell_hotel(game: &Game, owner: &mut Player, street_idx: usize) {
@@ -259,6 +288,10 @@ impl Game {
             for p_ref in self.players.iter() {
                 {
                     let mut player = p_ref.borrow_mut();
+                    if player.left_game() {
+                        // TODO: just remove this player from the list
+                        continue;
+                    }
                     print!("\n=== {}, Your turn ===", player.name());
                     self.jail_time(&mut player);
 
@@ -285,32 +318,115 @@ impl Game {
                     self.execute_turn(&mut *player, dice);
                 }
 
-                // present options of other transactions user can make
-                if !self.is_unit_test {
-                    self.execute_user_action();
+                if self.is_unit_test {
+                    continue;
                 }
+                // present options of other transactions user can make
+
+                let mut is_in_trouble;
+                let mut left_game;
+                let mut turn_idx;
+                {
+                    let player = p_ref.borrow();
+                    is_in_trouble = player.is_in_trouble();
+                    left_game = player.left_game();
+                    turn_idx = player.turn_idx();
+                }
+                let was_in_trouble = is_in_trouble;
+
+                while is_in_trouble {
+                    // player couldn't pay for the turn.
+                    // Player must now sell assets for cash
+                    println!("Uh oh! You don't have enough money to continue.");
+                    println!("You can sell assets, or leave the game");
+
+                    self.execute_user_action(turn_idx, is_in_trouble);
+
+                    {
+                        let player = p_ref.borrow();
+                        left_game = player.left_game();
+                    }
+
+                    // player still in the game, lets try run this turn again
+                    if !left_game {
+                        let mut player = p_ref.borrow_mut();
+                        // stay on same square, to see if player can pay debts
+                        self.execute_turn(&mut *player, Dice::new(0, 0));
+                    } else {
+                        break; // player has exited game
+                    }
+                    {
+                        let player = p_ref.borrow();
+                        is_in_trouble = player.is_in_trouble();
+                    }
+                }
+                self.execute_user_action(turn_idx, false);
             }
         }
     }
 
-    fn execute_user_action(&self) {
+    fn execute_user_action(&self, turn_idx: usize, is_in_trouble: bool) {
         loop {
             publisher::publish(&self);
-            let option = dialog::additional_user_actions();
+            let option = match is_in_trouble {
+                true  => dialog::trouble_user_actions(),
+                false => dialog::additional_user_actions()
+            };
             match option {
-                dialog::UserAction::EndTurn => return,
-                dialog::UserAction::SellStreet => {
-                    let player_idx = match dialog::get_player_idx(
-                            self, None, "Select the current owner") {
-                        Ok(s)  => s,
-                        Err(_) => {
-                            println!("Back to the menu");
-                            continue;
-                        }
+                dialog::UserAction::EndGame => {
+                    // liquify assets
+                    let squares = self.board.iter()
+                        .filter(|(s)| { match s.asset.borrow().owner {
+                                None => false,
+                                Some(u) => u == turn_idx
+                            }
+                        })
+                        .collect::<Vec<&square::Square>>();
+                    for square in squares {
+                        square.asset.borrow_mut().liquify();
+                    }
+
+                    let mut player = self.players.get(turn_idx).unwrap().borrow_mut();
+                    let pos_idx = player.position();
+                    player.leave_game();
+
+                    // If player is on a card square, move the card to the bottom
+                    let current_square = &self.board[pos_idx];
+                    match current_square.square_type() {
+                        square::SquareType::CommunityCard => {
+                            let mut cards = self.community_cards.borrow_mut();
+                            let card = cards.remove(0);
+                            cards.push(card);
+                        },
+                        square::SquareType::ChanceCard    => {
+                            let mut cards = self.chance_cards.borrow_mut();
+                            let card = cards.remove(0);
+                            cards.push(card);
+                        },
+                        _ => {} // do nothing
                     };
 
+                    println!("== Game Over! {} ==", player.name());
+                    break;
+                },
+                dialog::UserAction::EndTurn => return,
+                dialog::UserAction::SellStreet => {
+                    let player_idx = match is_in_trouble {
+                        true  => turn_idx,
+                        false => {
+                            match dialog::get_player_idx(
+                                    self, None, "Select the current owner") {
+                                Ok(s)  => s,
+                                Err(_) => {
+                                    println!("Back to the menu");
+                                    continue;
+                                }
+                            }
+                        }
+                    };
+                    
                     let mut orig_owner = self.players.get(player_idx)
-                                        .unwrap().borrow_mut();
+                            .unwrap().borrow_mut();
 
                     let eligible_streets :Vec<(usize, &square::Square)> = 
                             self.board.iter().enumerate()
@@ -385,17 +501,21 @@ impl Game {
                     actions::buy_house(&self, &mut owner, street_idx);
                 },
                 dialog::UserAction::SellHouse => {
-                    let player_idx = match dialog::get_player_idx(
-                            self, None, "Select the owner") {
-                        Ok(s)  => s,
-                        Err(_) => {
-                            println!("Back to the menu");
-                            continue;
+                    let player_idx = match is_in_trouble {
+                        true  => turn_idx,
+                        false => {
+                            match dialog::get_player_idx(
+                                    self, None, "Select the current owner") {
+                                Ok(s)  => s,
+                                Err(_) => {
+                                    println!("Back to the menu");
+                                    continue;
+                                }
+                            }
                         }
                     };
-
-                    let mut owner = self.players.get(player_idx)
-                                        .unwrap().borrow_mut();
+                    
+                    let mut owner = self.players.get(player_idx).unwrap().borrow_mut();
 
                     let eligible_streets :Vec<(usize, &square::Square)> = 
                             self.board.iter().enumerate()
@@ -450,17 +570,21 @@ impl Game {
                     actions::buy_hotel(&self, &mut owner, street_idx);
                 },
                 dialog::UserAction::SellHotel => {
-                    let player_idx = match dialog::get_player_idx(
-                            self, None, "Select the owner") {
-                        Ok(s)  => s,
-                        Err(_) => {
-                            println!("Back to the menu");
-                            continue;
+                    let player_idx = match is_in_trouble {
+                        true  => turn_idx,
+                        false => {
+                            match dialog::get_player_idx(
+                                    self, None, "Select the current owner") {
+                                Ok(s)  => s,
+                                Err(_) => {
+                                    println!("Back to the menu");
+                                    continue;
+                                }
+                            }
                         }
                     };
-
-                    let mut owner = self.players.get(player_idx)
-                                        .unwrap().borrow_mut();
+                    
+                    let mut owner = self.players.get(player_idx).unwrap().borrow_mut();
 
                     let eligible_streets :Vec<(usize, &square::Square)> = 
                             self.board.iter().enumerate()
@@ -482,18 +606,21 @@ impl Game {
                     actions::sell_hotel(&self, &mut owner, street_idx);
                 },
                 dialog::UserAction::Mortgage => {
-                    let player_idx = match dialog::get_player_idx(
-                            self, None, "Select the current owner") {
-                        Ok(s)  => s,
-                        Err(_) => {
-                            println!("Back to the menu");
-                            continue;
+                    let player_idx = match is_in_trouble {
+                        true  => turn_idx,
+                        false => {
+                            match dialog::get_player_idx(
+                                    self, None, "Select the current owner") {
+                                Ok(s)  => s,
+                                Err(_) => {
+                                    println!("Back to the menu");
+                                    continue;
+                                }
+                            }
                         }
                     };
-
-                    let mut owner = self.players.get(player_idx)
-                                        .unwrap().borrow_mut();
-
+                    
+                    let mut owner = self.players.get(player_idx).unwrap().borrow_mut();
 
                     let eligible_streets :Vec<(usize, &square::Square)> = 
                             self.board.iter().enumerate()
@@ -515,7 +642,6 @@ impl Game {
                     actions::mortgage_street(&self, &mut owner, street_idx);
                 },
                 dialog::UserAction::Unmortgage => {
-
                     let player_idx = match dialog::get_player_idx(
                             self, None, "Select the current owner") {
                         Ok(s)  => s,
@@ -552,14 +678,15 @@ impl Game {
     }
 
     /// Capture player name, and price, and complete purchase
-    fn auction(&self, player: &player::Player, square: &square::Square) {
+    fn auction(&self, player: &player::Player, square: &square::Square) 
+            -> Result<(), ()> {
         println!("Auction!!");
         let owner_idx = match dialog::get_player_idx(self, Some(player),
                                                      "Select the new owner") {
             Ok(o)  => o,
             Err(_) => {
                 println!("Back to the menu");
-                return;
+                return Ok(());
             }
         };
 
@@ -567,13 +694,13 @@ impl Game {
             Ok(p) => p,
             Err(_) => {
                 println!("Back to the menu");
-                return;
+                return Ok(());
             }
         };
 
         let mut owner = self.players.get(owner_idx).expect("Player should exist")
                             .borrow_mut();
-        self.buy_property(&mut *owner, square, purchase_price);
+        self.buy_property(&mut *owner, square, purchase_price)
     }
 
     /// Give player in jail options to get out
@@ -602,7 +729,8 @@ impl Game {
     }
 
     /// Execute action on card
-    fn execute_card(&self, player: &mut player::Player, card: &card::Card) {
+    fn execute_card(&self, player: &mut player::Player, card: &card::Card)
+            -> Result <(), ()> {
         println!("{}", card.description());
         match card.action() {
             card::CardAction::Movement =>  {
@@ -613,10 +741,11 @@ impl Game {
                     true  => Dice::new(target - p_pos, 0),
                     false => Dice::new(target + BOARD_SIZE - p_pos, 0)
                 };
-                self.execute_turn(player, dice);
+                return self.execute_turn(player, dice);
             },
             card::CardAction::Payment => {
-                player.transact_cash(-1 * card.amount().expect("Amount should exist"));
+                return player.transact_cash(-1 * card.amount()
+                        .expect("Amount should exist"));
             },
             card::CardAction::Jail => {
                 player.go_to_jail();
@@ -625,6 +754,7 @@ impl Game {
                 player.receive_jail_free_card();
             }
         }
+        Ok(())
     }
 
     /// Get all squares owned by a player
@@ -717,43 +847,65 @@ impl Game {
     }
 
     /// Actions on corner squares
-    fn execute_square_corner(&self, player: &mut player::Player, square: &square::Square) {
+    fn execute_square_corner(&self, player: &mut player::Player, square: &square::Square)
+            -> Result<(), ()> {
         if player.position() == 30 {
             println!("GO TO JAIL!");
             player.go_to_jail();
         } else {
             println!("{}", square.name());
         }
+        Ok(())
     }
 
-    fn execute_square_tax(&self, player: &mut player::Player) {
+    fn execute_square_tax(&self, player: &mut player::Player) -> Result<(), ()> {
         match player.position() {
             4 => {
                 println!("Oh No! Pay $200 in Income Tax!");
-                player.transact_cash(-200);
+                player.transact_cash(-200)
             },
             38 => {
                 println!("Oh No! Pay $100 in Luxury Tax!");
-                player.transact_cash(-100);
+                player.transact_cash(-100)
             }
-            _ => {println!("Error, undefined Tax"); }
+            _ => {println!("Error, undefined Tax"); Ok(()) }
         }
     }
 
-    fn execute_square_community(&self, player: &mut player::Player) {
+    fn execute_square_community(&self, player: &mut player::Player) -> Result<(), ()> {
         println!("COMMUNITY CHEST!");
         let mut cards = self.community_cards.borrow_mut();
         let card = cards.remove(0);
-        self.execute_card(player, &card);
-        cards.push(card);
+        match self.execute_card(player, &card) {
+            Ok(_) => {
+                // All good
+                cards.push(card);
+                Ok(())
+            },
+            Err(_) => {
+                // player couldn't pay. return card to its original position
+                cards.insert(0, card);
+                Err(())
+            }
+        }
     }
 
-    fn execute_square_chance(&self, player: &mut player::Player) {
+    fn execute_square_chance(&self, player: &mut player::Player) -> Result<(), ()> {
         println!("CHANCE!");
         let mut cards = self.chance_cards.borrow_mut();
         let card = cards.remove(0);
-        self.execute_card(player, &card);
-        cards.push(card);
+        match self.execute_card(player, &card) {
+            Ok(_) => {
+                // All good
+                cards.push(card);
+                Ok(())
+            },
+            Err(_) => {
+                // player couldn't pay. return card to its original position
+                cards.insert(0, card);
+                Err(())
+            }
+        }
     }
 
     /// Sell property to another player
@@ -775,21 +927,21 @@ impl Game {
     }
 
     /// Purchase the property
-    fn buy_property(&self, new_owner: &mut player::Player, square: &square::Square, price: u32) {
+    fn buy_property(&self, new_owner: &mut player::Player,
+                    square: &square::Square, price: u32) -> Result<(), ()> {
         // buying from scratch
-        if new_owner.cash() < price {
-            println!("You do not have enouch cash. You'll have to auction it");
-            self.auction(new_owner, square);
-            return;
-        }
         println!("You buy {} for ${}", square.name(), price);
-        new_owner.transact_cash(-1 * (price as i32));
+        if new_owner.transact_cash(-1 * (price as i32)).is_err() {
+            return Err(()); // should never happen, since price check was done already
+        };
         let mut asset = square.asset.borrow_mut();
         asset.owner = Some(new_owner.turn_idx());
+        Ok(())
     }
 
-    fn execute_square_property(&self, player: &mut player::Player, square: &square::Square,
-                               dice: Dice) {
+    fn execute_square_property(&self, player: &mut player::Player,
+                               square: &square::Square, dice: Dice) 
+            -> Result<(), ()> {
         println!("You landed on {}", square.name());
         match self.calculate_rent(square, dice) {
             None => {
@@ -797,9 +949,13 @@ impl Game {
                 // For unit tests, purchase automatically, with no auction option
                 if self.is_unit_test {
                     self.buy_property(player, square, square.get_price());
-                    return;
+                    return Ok(());
                 }
 
+                if player.cash() < square.get_price() {
+                    println!("You can't afford to buy this street.");
+                    return self.auction(player, square);
+                }
                 let message = format!("Do you want to buy {} for ${}? (Y/n)",
                                       square.name(), square.get_price());
                 match super::dialog::yes_no(&message) {
@@ -816,9 +972,12 @@ impl Game {
                     let mut owner = self.players.get(owner_idx)
                         .expect("Owner should exist").borrow_mut();
                     println!("Oh no! You pay ${} to {}", rent, owner.name());
-                    player.transact_cash(-1 * (rent as i32));
+                    if player.transact_cash(-1 * (rent as i32)).is_err() {
+                        return Err(()); // player is now in trouble
+                    };
                     owner.transact_cash(rent as i32);
                 }
+                Ok(())
             }
         }
     }
@@ -827,12 +986,13 @@ impl Game {
     // The turn starts with a player moving. Then, once the player is on the new square,
     // the rules for that new square execute. Lastly, other players may want to execute 
     // transactions
-    fn execute_turn(&self, player: &mut player::Player, dice: Dice) {
+    fn execute_turn(&self, player: &mut player::Player, dice: Dice) 
+            -> Result<(), ()> {
 
         if dice.num_rolls == 3 {
             println!("GO TO JAIL");
             player.go_to_jail();
-            return;
+            return Ok(());
         }
 
         let old_pos = player.position();
@@ -842,10 +1002,9 @@ impl Game {
             println!("Yay! You pass begin and collect $200");
             player.transact_cash(200);
         }
-        // TODO: If 3 doubles, go to jail
         
         let square = self.board.get(player.position()).unwrap();
-        match square.square_type() {
+        let r = match square.square_type() {
             square::SquareType::Utility |
             square::SquareType::Station |
             square::SquareType::Street        => self.execute_square_property(player, &square,
@@ -854,7 +1013,14 @@ impl Game {
             square::SquareType::Tax           => self.execute_square_tax(player),
             square::SquareType::CommunityCard => self.execute_square_community(player),
             square::SquareType::ChanceCard    => self.execute_square_chance(player)
-        }
+        };
+
+        // Player is in trouble if the transaction failed
+        match r {
+            Ok(_)  => player.set_in_trouble(false),
+            Err(_) => player.set_in_trouble(true)
+        };
+        Ok(())
     }
 
     /// Calculate if a player owns all streets in the suburb
@@ -1760,5 +1926,22 @@ mod tests {
         assert_eq!(dice.num_rolls, 2);
         assert_eq!(dice.cumulative_sum, 13);
         assert_eq!(dice.is_double(), false);
+    }
+
+    #[test]
+    fn player_in_trouble() {
+        // player is in trouble when can't pay their bill
+        // move player to income tax 8 times. on the last time, they're in trouble
+        let mut g = init(vec!["Chancer".to_string()]);
+        g.set_unit_test();
+        let mut player = g.players.get(0).unwrap().borrow_mut();
+        g.execute_turn(&mut player, Dice::new(4, 0)); // income tax pay 200
+        for i in 1..8 {
+            assert_eq!(player.cash(), (1500 - (200*i)));
+            g.execute_turn(&mut player, Dice::new(40, 0)); // income tax, pay 200
+        }
+        assert_eq!(player.cash(), 100); // didn't pay yet
+        assert_eq!(player.is_in_trouble(), true); // now in trouble
+        // do this another 
     }
 }

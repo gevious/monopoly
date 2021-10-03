@@ -667,7 +667,7 @@ impl Game {
     fn auction(&self, player: &player::Player, square: &square::Square) 
             -> Result<(), ()> {
         println!("Auction!!");
-        let owner_idx = match dialog::get_player_idx(self, Some(player),
+        let owner_idx = match dialog::get_player_idx(self, None,
                                                      "Select the new owner") {
             Ok(o)  => o,
             Err(_) => {

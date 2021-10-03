@@ -146,7 +146,6 @@ fn get_dice_roll(user_input: String) -> Option<(u32, u32)> {
     Some((roll.pop().unwrap(), last))
 }
 
-
 /// Capture yes/no answer from the user
 pub fn yes_no(message: &str) -> bool {
     loop {

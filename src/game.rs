@@ -264,6 +264,10 @@ impl Dice {
         self.roll.0 + self.roll.1
     }
 
+    pub fn cumulative_sum(&self) -> u32 {
+        self.cumulative_sum
+    }
+
     pub fn roll(&self) -> (u32, u32) {
         self.roll
     }
@@ -289,7 +293,6 @@ impl Game {
                 {
                     let mut player = p_ref.borrow_mut();
                     if player.left_game() {
-                        // TODO: just remove this player from the list
                         continue;
                     }
                     println!("\n=== {}, Your turn ===", player.name());
@@ -297,23 +300,6 @@ impl Game {
 
                     print!("Roll dice: ");
                     let mut dice = dialog::capture_dice_roll();
-
-                    while dice.is_double() {
-                        if player.is_in_jail(){
-                            println!("YAY, you're released from jail");
-                            player.leave_jail();
-                            break;
-                        }
-
-                        if dice.num_rolls == 3 {
-                            break;
-                        }
-
-                        // rolled a double
-                        println!("A double. Roll again");
-                        let d = dialog::capture_dice_roll();
-                        dice.reroll(d)
-                    }
 
                     self.execute_turn(&mut *player, dice);
                 }
@@ -850,7 +836,6 @@ impl Game {
     fn execute_square_corner(&self, player: &mut player::Player, square: &square::Square)
             -> Result<(), ()> {
         if player.position() == 30 {
-            println!("GO TO JAIL!");
             player.go_to_jail();
         } else {
             println!("{}", square.name());
@@ -986,17 +971,38 @@ impl Game {
     // The turn starts with a player moving. Then, once the player is on the new square,
     // the rules for that new square execute. Lastly, other players may want to execute 
     // transactions
-    fn execute_turn(&self, player: &mut player::Player, dice: Dice) 
+    fn execute_turn(&self, player: &mut player::Player, mut dice: Dice) 
             -> Result<(), ()> {
 
-        if dice.num_rolls == 3 {
-            println!("GO TO JAIL");
-            player.go_to_jail();
+        // rolling double has special rules
+        while dice.is_double() {
+            if player.is_in_jail(){
+                println!("YAY, you're released from jail");
+                player.leave_jail();
+                break;
+            }
+
+            if dice.num_rolls == 3 {
+                player.go_to_jail();
+                return Ok(());
+            }
+
+            // rolled a double
+            println!("A double. Roll again");
+            let d = match self.is_unit_test {
+                true => Dice::new(10, 20), // random roll
+                false => dialog::capture_dice_roll()
+            };
+            dice.reroll(d);
+        }
+
+        // player doesn't advance if in jail and didn't roll double
+        if player.is_in_jail() {
             return Ok(());
         }
 
         let old_pos = player.position();
-        player.advance(dice.total(), BOARD_SIZE);
+        player.advance(dice.cumulative_sum(), BOARD_SIZE);
 
         if player.position() < old_pos {
             println!("Yay! You pass begin and collect $200");
@@ -1386,27 +1392,65 @@ mod tests {
        assert_eq!(p.cash(), 1450);
     }
 
-    //#[test]
-    fn three_doubles_in_jail() {
-        // FIXME, this test should run the start function which is where doubles are 
-        // rolled
+    #[test]
+    fn three_2_doubles_not_in_jail() {
         let mut g = init(vec!["Test".to_string()]);
         g.set_unit_test();
 
         // go to jail
         let mut p = g.players.get(0).unwrap().borrow_mut();
         assert_eq!(p.is_in_jail(), false);
-        assert_eq!(p.cash(), 1500);
 
-        g.execute_turn(&mut p, Dice::new(10, 10));
+        let mut dice = Dice::new(2, 2);
+        dice.reroll(Dice::new(2, 2));
+        assert_eq!(dice.num_rolls, 2);
+        g.execute_turn(&mut p, dice);
+        assert_eq!(p.is_in_jail(), false);
+    }
+
+    #[test]
+    fn three_doubles_in_jail() {
+        let mut g = init(vec!["Test".to_string()]);
+        g.set_unit_test();
+
+        // go to jail
+        let mut p = g.players.get(0).unwrap().borrow_mut();
         assert_eq!(p.is_in_jail(), false);
 
-        g.execute_turn(&mut p, Dice::new(6, 6));
-        assert_eq!(p.is_in_jail(), false);
-
-        g.execute_turn(&mut p, Dice::new(6, 6));
+        let mut dice = Dice::new(2, 2);
+        dice.reroll(Dice::new(2, 2));
+        dice.reroll(Dice::new(2, 2));
+        assert_eq!(dice.num_rolls, 3);
+        g.execute_turn(&mut p, dice);
         assert_eq!(p.is_in_jail(), true);
         assert_eq!(p.cash(), 1500);
+    }
+
+    #[test]
+    fn player_in_jail_does_not_advance() {
+        let mut g = init(vec!["Jailbird".to_string()]);
+        g.set_unit_test();
+
+        // go to jail
+        let mut p = g.players.get(0).unwrap().borrow_mut();
+        p.transact_cash(-1480);
+        let mut dice = Dice::new(2, 2);
+        dice.reroll(Dice::new(2, 2));
+        dice.reroll(Dice::new(2, 2));
+        g.execute_turn(&mut p, dice);
+        assert_eq!(p.is_in_jail(), true);
+        assert_eq!(p.cash(), 20); // now can't pay $50 to be free from jail
+
+        // stay in jail when not rolling double or paying $50 to get free
+        g.execute_turn(&mut p, Dice::new(3, 2));
+        assert_eq!(p.is_in_jail(), true);
+        assert_eq!(p.position(), 10);
+        assert_eq!(p.cash(), 20);
+
+        // player is free when rolling double
+        g.execute_turn(&mut p, Dice::new(3, 3));
+        assert_eq!(p.is_in_jail(), false);
+        assert_eq!(p.position(), 16);
     }
 
     #[test]

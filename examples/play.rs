@@ -69,6 +69,7 @@ fn main() {
     game.start();
 }
 
+#[cfg(test)]
 mod tests {
 
     #[test]

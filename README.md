@@ -47,7 +47,18 @@ Monopoly clone, to help visually impaired keep track of resourcesG
 - [x] Check if player can afford house
 - [x] Confirm with player, before buying building, and publish cost
 - [x] If player cannot pay rent (tax etc), enforce selling assets
-- [ ] Remove player from game loop if player leaves the game
+- [ ] If player quits, allocate money to pay debt
+- [ ] If player owes money, let player sell properties to reduce the debt
+- [ ] For auction, show only active players
+- [ ] For auction, all active players can buy (incl person who couldn't afford it)
+- [ ] If in jail, and not roll double, do not advance
+- [ ] Landing on morgaged place, do not offer to buy it
+- [ ] Chance, send to boardwalk should cause owner to receive money (if player has no money)
+- [ ] Confirm 3 doubles go to jail (not 2)
+- [ ] When chance, advance to go, don't get paid double
+- [ ] Sell house before selling street to others
+- [ ] Allow user to control game from website
+- [ ] Push json object to webpage, and reload json every second
 - [ ] Card event: make repairs on houses/hotels
 - [ ] Card event: pay players money for birthday
 

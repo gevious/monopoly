@@ -104,7 +104,7 @@ mod actions {
             return;
         }
 
-        let msg = format!("Confirm: Buy a house on {} for ${}?",
+        let msg = format!("Confirm: Buy a house on {} for ${} (Y/n)?",
                           street.name(), building_price);
         match dialog::yes_no(&msg) {
             false => {}, // do nothing
@@ -292,10 +292,10 @@ impl Game {
                         // TODO: just remove this player from the list
                         continue;
                     }
-                    print!("\n=== {}, Your turn ===", player.name());
+                    println!("\n=== {}, Your turn ===", player.name());
                     self.jail_time(&mut player);
 
-                    print!("\nRoll dice: ");
+                    print!("Roll dice: ");
                     let mut dice = dialog::capture_dice_roll();
 
                     while dice.is_double() {

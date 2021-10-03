@@ -376,7 +376,7 @@ impl Game {
                 dialog::UserAction::EndGame => {
                     // liquify assets
                     let squares = self.board.iter()
-                        .filter(|(s)| { match s.asset.borrow().owner {
+                        .filter(|s| { match s.asset.borrow().owner {
                                 None => false,
                                 Some(u) => u == turn_idx
                             }

@@ -2,12 +2,7 @@ use std::io;
 use std::io::{Write};
 use std::convert::TryInto;
 
-mod dialog;
-mod card;
-mod game;
-mod player;
-mod publisher;
-mod square;
+use monopoly::{game};
 
 /// Get the number of players
 fn get_player_num(user_input: String) -> Result<i32, ()> {
@@ -75,7 +70,6 @@ fn main() {
 }
 
 mod tests {
-    use super::*;
 
     #[test]
     fn test_player_num() {

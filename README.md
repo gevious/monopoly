@@ -3,8 +3,8 @@ Monopoly clone, to help visually impaired keep track of resourcesG
 
 # Getting Started
 - clone the repo
+- run `cargo run --example play` to start the game
 - run `cargo test` to build and run unit tests
-- run `cargo run` to start the game
 
 # Roadmap 
 - [x] Infinite loop asking for dice roll

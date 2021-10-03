@@ -149,7 +149,7 @@ fn get_dice_roll(user_input: String) -> Option<(u32, u32)> {
 /// Capture yes/no answer from the user
 pub fn yes_no(message: &str) -> bool {
     loop {
-        println!("{}", message);
+        println!("{} (Y/n)", message);
         let _= io::stdout().flush();
         let mut user_input = String::new();
         match io::stdin().read_line(&mut user_input) {
@@ -170,17 +170,19 @@ pub fn yes_no(message: &str) -> bool {
 
 /// Capture the idx of a player from the user
 // This method is useful for out-of-band transactions. These include auctions and ad-hoc selling of property to others
-pub fn get_player_idx(game: &Game, player: Option<&Player>, msg: &str) 
+pub fn get_player_idx(game: &Game, player: Option<usize>, msg: &str) 
         -> Result<usize, ()> {
     // Do not print current player
+
     let mut valid_options = Vec::<usize>::new();
-    for i in 0..game.players.len() {
-        match player {
-            None  => {},
-            Some(p) => if p.turn_idx() == i { continue; }
+    for (i, p) in game.players.iter().enumerate() {
+        if p.borrow().left_game() { continue; }; // ignore players who've left the game
+        if player.is_some() {
+            if player.unwrap() == i { continue; };
         }
         valid_options.push(i+1);
-        println!("{}: {}", i+1, game.players.get(i).unwrap().borrow().name());
+        // Fails because current player is already borrowed somewhere else
+        println!("{}: {}", i+1, p.borrow().name());
     }
     println!("q: Quit, and return to the menu");
 

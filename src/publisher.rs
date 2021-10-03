@@ -16,6 +16,10 @@ fn print_summary(game: &Game) {
         let occupying_square = game.board.get(p.position())
             .expect("Player is not on the board");
         print!("{} ", p.name());
+        if p.left_game() {
+            println!("\t Has left the game");
+            continue;
+        }
         match p.is_in_jail() {
             true  => println!("\t is IN JAIL 🚧, but still has ${}", p.cash()),
             false => println!("\t is on {} with ${}", occupying_square.name(), p.cash()) 
@@ -74,6 +78,10 @@ pub fn publish(game: &Game) {
         let p = p_ref.borrow();
         let occupying_square = game.board.get(p.position())
             .expect("Player is not on the board");
+        if p.left_game() {
+            sb.push_str(&format!("{} has left the game", p.name()));
+            continue;
+        }
         sb.push_str(&format!("{} : ${}", p.name(), p.cash()));
         sb.push_str("<ul>");
         match p.is_in_jail() {

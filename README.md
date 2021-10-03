@@ -50,8 +50,8 @@ Monopoly clone, to help visually impaired keep track of resourcesG
 - [x] Confirm 3 doubles go to jail (not 2)
 - [x] If in jail, and not roll double, do not advance
 - [x] For auction, all active players can buy (incl person who couldn't afford it)
+- [x] Landing on morgaged place, do not offer to buy it
 - [ ] For auction, show only active players
-- [ ] Landing on morgaged place, do not offer to buy it
 - [ ] If player quits, allocate money to pay debt
 - [ ] If player owes money, let player sell properties to reduce the debt
 - [ ] Chance, send to boardwalk should cause owner to receive money (if player has no money)

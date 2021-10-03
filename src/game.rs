@@ -771,7 +771,6 @@ impl Game {
             Some(r) => r
         };
         if s.asset.borrow().is_mortgaged() {
-            println!("Phew! {} is mortgaged, so no rent is due", s.name());
             return None;
         };
 
@@ -924,13 +923,17 @@ impl Game {
         Ok(())
     }
 
+    /// Landed on a square that can be bought
     fn execute_square_property(&self, player: &mut player::Player,
                                square: &square::Square, dice: Dice) 
             -> Result<(), ()> {
         println!("You landed on {}", square.name());
-        match self.calculate_rent(square, dice) {
-            None => {
-
+        let has_owner = match square.asset.borrow().owner {
+            Some(_) => true,
+            None => false
+        };
+        match has_owner {
+            false => { // Unowned asset
                 // For unit tests, purchase automatically, with no auction option
                 if self.is_unit_test {
                     self.buy_property(player, square, square.get_price());
@@ -947,21 +950,28 @@ impl Game {
                     true => self.buy_property(player, square, square.get_price()),
                     false => self.auction(player, square)
                 }
-            }, 
-            Some(rent) => {
-                let owner_idx = square.asset.borrow().owner
-                    .expect("Somebody owns this street");
+            },
+            true => { // Owned asset
+                let asset = square.asset.borrow();
+                let owner_idx = asset.owner.unwrap();
                 if owner_idx == player.turn_idx() {
                     println!("Phew! Luckily it's yours");
-                } else {
-                    let mut owner = self.players.get(owner_idx)
-                        .expect("Owner should exist").borrow_mut();
-                    println!("Oh no! You pay ${} to {}", rent, owner.name());
-                    if player.transact_cash(-1 * (rent as i32)).is_err() {
-                        return Err(()); // player is now in trouble
-                    };
-                    owner.transact_cash(rent as i32);
+                    return Ok(());
                 }
+
+                if asset.is_mortgaged() {
+                    println!("Phew! {} is mortgaged, so no rent is due", square.name());
+                    return Ok(());
+                }
+                let rent = self.calculate_rent(square, dice).expect("Rent should exist");
+
+                let mut owner = self.players.get(owner_idx)
+                    .expect("Owner should exist").borrow_mut();
+                println!("Oh no! You pay ${} to {}", rent, owner.name());
+                if player.transact_cash(-1 * (rent as i32)).is_err() {
+                    return Err(()); // player is now in trouble
+                };
+                owner.transact_cash(rent as i32);
                 Ok(())
             }
         }
@@ -1987,5 +1997,29 @@ mod tests {
         assert_eq!(player.cash(), 100); // didn't pay yet
         assert_eq!(player.is_in_trouble(), true); // now in trouble
         // do this another 
+    }
+
+    #[test]
+    fn player_on_mortgaged_property() {
+        let mut g = init(vec!["A".to_string(), "B".to_string()]);
+        g.set_unit_test();
+        let street_idx = 3;
+        let street = g.board.get(street_idx).unwrap();
+
+        {
+            let mut player = g.players.get(0).unwrap().borrow_mut();
+            g.execute_turn(&mut player, Dice::new(1, 2)); // buy baltic
+            assert_eq!(street.asset.borrow().owner.unwrap(), 0);
+            // mortgage Baltic
+            actions::mortgage_street(&g, &mut player, street_idx);
+            assert_eq!(street.asset.borrow().is_mortgaged(), true);
+        }
+
+        // Player B lands on baltic and pays no rent
+        let mut player = g.players.get(1).unwrap().borrow_mut();
+        assert_eq!(player.cash(), 1500);
+        g.execute_turn(&mut player, Dice::new(1, 2)); // land on baltic
+        assert_eq!(street.asset.borrow().owner.unwrap(), 0);
+        assert_eq!(player.cash(), 1500);
     }
 }

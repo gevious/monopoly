@@ -54,10 +54,10 @@ Monopoly clone, to help visually impaired keep track of resourcesG
 - [x] For auction, show only active players
 - [x] Card event: Implement more cards (change as needed)
 - [x] Card event: make repairs on houses/hotels
+- [x] When chance, advance to go, don't get paid double
 - [ ] If player quits, allocate money to pay debt
 - [ ] If player owes money, let player sell properties to reduce the debt
 - [ ] Chance, send to boardwalk should cause owner to receive money (if player has no money)
-- [ ] When chance, advance to go, don't get paid double
 - [ ] Sell house before selling street to others
 - [ ] Allow user to control game from website
 - [ ] Push json object to webpage, and reload json every second

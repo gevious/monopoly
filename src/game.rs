@@ -2157,8 +2157,18 @@ mod tests {
         }
         g.execute_card(&card::Card::new("test", card::CardAction::Movement,
                                         None, Some(10)));
+        {
+            let player = g.players.get(0).unwrap().borrow();
+            assert_eq!(player.position(), 10);
+            assert_eq!(player.cash(), 1440);
+        }
+
+        // advance to GO, only get $200
+        g.execute_card(&card::Card::new("test", card::CardAction::Movement,
+                                        None, Some(0)));
         let player = g.players.get(0).unwrap().borrow();
-        assert_eq!(player.position(), 10);
+        assert_eq!(player.position(), 0);
+        assert_eq!(player.cash(), 1640);
     }
 
     #[test]

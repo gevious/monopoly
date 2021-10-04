@@ -802,27 +802,64 @@ impl Game {
     fn execute_card(&self, card: &card::Card)
             -> Result <(), ()> {
         println!("{}", card.description());
-        let mut player = self.players.get(self.active_player()).unwrap().borrow_mut();
         match card.action() {
             card::CardAction::Movement =>  {
                 // calculate the dice number based on square
                 let target = card.square().expect("Target square should exist");
-                let p_pos = player.position() as u32;
+                let p_pos = {
+                    self.players.get(self.active_player())
+                                     .unwrap().borrow_mut().position() as u32
+                };
                 let dice = match target > p_pos {
                     true  => Dice::new(target - p_pos, 0),
                     false => Dice::new(target + BOARD_SIZE - p_pos, 0)
                 };
                 return self.execute_turn(dice);
             },
+            card::CardAction::RelativeMovement => {
+                let movement = card.square().expect("Target square should exist");
+                let p_pos = {
+                    self.players.get(self.active_player())
+                                     .unwrap().borrow_mut().position() as u32
+                };
+                return self.execute_turn(Dice::new(movement, 0));
+            },
             card::CardAction::Payment => {
+                let mut player = self.players.get(self.active_player())
+                                     .unwrap().borrow_mut();
                 return player.transact_cash(-1 * card.amount()
                         .expect("Amount should exist"));
             },
             card::CardAction::Jail => {
+                let mut player = self.players.get(self.active_player())
+                                     .unwrap().borrow_mut();
                 player.go_to_jail();
             },
             card::CardAction::JailRelease => {
+                let mut player = self.players.get(self.active_player())
+                                     .unwrap().borrow_mut();
                 player.receive_jail_free_card();
+            },
+            card::CardAction::Repairs => {
+                let mut player = self.players.get(self.active_player())
+                                     .unwrap().borrow_mut();
+                let assets = self.board.iter()
+                    .filter(|s| match s.asset.borrow().owner {
+                        None => false,
+                        Some(o) => o == player.turn_idx()
+                    })
+                    .map(|s| &s.asset)
+                    .collect::<Vec<&RefCell<player::Asset>>>();
+                let house_num = assets.iter()
+                    .filter(|a| !a.borrow().has_hotel())
+                    .fold(0, |sum, a| sum + a.borrow().house_num());
+                let hotel_num = assets.iter()
+                    .filter(|a| a.borrow().has_hotel())
+                    .fold(0, |sum, a| sum + 1);
+                let total = (house_num * card.amount().unwrap() as u32)
+                          + (hotel_num * card.square().unwrap());
+                println!("You need to pay a total of ${}", total);
+                return player.transact_cash(-1 * total as i32);
             }
         }
         Ok(())
@@ -1182,29 +1219,29 @@ fn load_chance_cards() -> Vec<card::Card> {
     cards.push(card::Card::new("GO TO JAIL!", card::CardAction::Jail, None, None));
     cards.push(card::Card::new("Advance to St. Charles Place",
                          card::CardAction::Movement, None, Some(11)));
-////        cards.push(card::Card::new("Make general repairs on all your property. House, $25 each; Hotel, $100 each", card::CardAction::PaymentDice, Some(25), None), // TODO: calculate amoun);
-////       cards.push(card::Card::new("Advance to the next railroad. If unowned, you can buy it. if owned, pay twice the rent", card::CardAction::Unknown, None, None), // TODO: calculate amoun);
-      cards.push(card::Card::new("You have been elected chairman of the board. Pay $50",
-                           card::CardAction::Payment, Some(50), None));
-//                           card::CardAction::PaymentPlayers, Some(50), None));
-      cards.push(card::Card::new("Take a trip to Reading Railroad.",
-                           card::CardAction::Movement, None, Some(5)));
-      cards.push(card::Card::new("Speeding fine. Pay $15",
-                           card::CardAction::Payment, Some(15), None));
-      cards.push(card::Card::new("Your building load matures. Receive $150",
-                           card::CardAction::Payment, Some(-150), None));
-      cards.push(card::Card::new("Advance to Boardwalk",
-                           card::CardAction::Movement, None, Some(39)));
-//        card::Card::new("Go back three spaces", card::CardAction::MovementRelative, None, Some(-3)), // TODO: move relative to current square
-      cards.push(card::Card::new("Advance to Illinois Avenue",
-                           card::CardAction::Movement, None, Some(24)));
-      cards.push(card::Card::new("Advance to GO. Collect $200",
-                           card::CardAction::Movement, None, Some(0)));
-      cards.push(card::Card::new("GET OUT OF JAIL FREE.",
-                           card::CardAction::JailRelease, None, None));
-//        card::Card::new("Take all $100 bills from the Bank and throw them in the air", card::CardAction::Unknown, None, None), // TODO: how to model this? Random allocation?
-//        card::Card::new("Advance to the nearest railroad. If unowned, you can buy it. If owned, pay twice the rent", card::CardAction::Unknown, None, None), // TODO: go to closest 5,15,25,35. 2x amount
-//        card::Card::new("Advance to the nearest utility. If unowned, you can buy it. If owned, roll the dice, and pay the owner 10x the roll", card::CardAction::Unknown, None, None), // TODO: pay relative to roll
+    cards.push(card::Card::new("Make general repairs on all your property. House, $25 each; Hotel, $100 each", card::CardAction::Repairs, Some(25), Some(100)));
+    cards.push(card::Card::new("Go forward three spaces",
+                         card::CardAction::RelativeMovement, None, Some(3)));
+    cards.push(card::Card::new("You have been elected chairman of the board. Pay $50",
+                         card::CardAction::Payment, Some(50), None));
+    cards.push(card::Card::new("Take a trip to Reading Railroad.",
+                         card::CardAction::Movement, None, Some(5)));
+    cards.push(card::Card::new("Speeding fine. Pay $15",
+                         card::CardAction::Payment, Some(15), None));
+    cards.push(card::Card::new("Your building load matures. Receive $150",
+                         card::CardAction::Payment, Some(-150), None));
+    cards.push(card::Card::new("Advance to Boardwalk",
+                         card::CardAction::Movement, None, Some(39)));
+    cards.push(card::Card::new("Go back three spaces",
+                         card::CardAction::RelativeMovement, None, Some(37)));
+    cards.push(card::Card::new("Advance to Illinois Avenue",
+                         card::CardAction::Movement, None, Some(24)));
+    cards.push(card::Card::new("Advance to GO. Collect $200",
+                         card::CardAction::Movement, None, Some(0)));
+    cards.push(card::Card::new("GET OUT OF JAIL FREE.",
+                         card::CardAction::JailRelease, None, None));
+    cards.push(card::Card::new("You win the lottery. Receive $500", card::CardAction::Payment, Some(-150), None));
+    cards.push(card::Card::new("Advance to Water works.", card::CardAction::Movement, None, Some(28)));
     shuffle_cards(&mut cards);
     cards
 }
@@ -1212,7 +1249,7 @@ fn load_chance_cards() -> Vec<card::Card> {
 /// Load the community chest cards
 fn load_community_chest_cards() -> Vec<card::Card> {
     let mut cards = Vec::new();
-//        card::Card::new("You are assessed for Street repairs: $40 per House, $115 per Hotel", card::CardAction::Payment, Some(0), None),
+    cards.push(card::Card::new("You are assessed for Street repairs: $40 per House, $115 per Hotel", card::CardAction::Repairs, Some(40), Some(115)));
     cards.push(card::Card::new("GET OUT OF JAIL FREE.", card::CardAction::JailRelease, None, None));
     cards.push(card::Card::new("You have won second prize in a beauty contest. Collect $10",
                          card::CardAction::Payment, Some(-10), None));
@@ -2107,5 +2144,147 @@ mod tests {
         let player = g.players.get(1).unwrap().borrow();
         assert_eq!(street.asset.borrow().owner.unwrap(), 0);
         assert_eq!(player.cash(), 1500);
+    }
+
+    #[test]
+    fn execute_card_movement() {
+        let mut g = init(vec!["A".to_string()]);
+        g.set_unit_test();
+        g.execute_turn(Dice::new(1, 2));
+        {
+            let player = g.players.get(0).unwrap().borrow();
+            assert_eq!(player.position(), 3);
+        }
+        g.execute_card(&card::Card::new("test", card::CardAction::Movement,
+                                        None, Some(10)));
+        let player = g.players.get(0).unwrap().borrow();
+        assert_eq!(player.position(), 10);
+    }
+
+    #[test]
+    fn execute_card_relative_movement() {
+        let mut g = init(vec!["A".to_string()]);
+        g.set_unit_test();
+        g.execute_turn(Dice::new(1, 2));
+        {
+            let player = g.players.get(0).unwrap().borrow();
+            assert_eq!(player.position(), 3);
+        }
+        g.execute_card(&card::Card::new("test", card::CardAction::RelativeMovement,
+                                        None, Some(3)));
+        {
+            let player = g.players.get(0).unwrap().borrow();
+            assert_eq!(player.position(), 6);
+        }
+
+        g.execute_card(&card::Card::new("test", card::CardAction::RelativeMovement,
+                                        None, Some(36)));
+        let player = g.players.get(0).unwrap().borrow();
+        assert_eq!(player.position(), 2);
+    }
+
+    #[test]
+    fn execute_card_payment() {
+        let mut g = init(vec!["A".to_string()]);
+        g.set_unit_test();
+        g.execute_turn(Dice::new(1, 3));
+        {
+            let player = g.players.get(0).unwrap().borrow();
+            assert_eq!(player.cash(), 1300);
+        }
+        g.execute_card(&card::Card::new("test", card::CardAction::Payment,
+                                        Some(100), None));
+        {
+            let player = g.players.get(0).unwrap().borrow();
+            assert_eq!(player.cash(), 1200);
+        }
+
+        g.execute_card(&card::Card::new("test", card::CardAction::Payment,
+                                        Some(-50), None));
+        let player = g.players.get(0).unwrap().borrow();
+        assert_eq!(player.cash(), 1250);
+    }
+
+    #[test]
+    fn execute_card_jail() {
+        let mut g = init(vec!["A".to_string()]);
+        g.set_unit_test();
+        g.execute_turn(Dice::new(1, 3));
+        {
+            let player = g.players.get(0).unwrap().borrow();
+            assert_eq!(player.cash(), 1300);
+        }
+        g.execute_card(&card::Card::new("test", card::CardAction::Jail,
+                                        None, None));
+        {
+            let player = g.players.get(0).unwrap().borrow();
+            assert_eq!(player.is_in_jail(), true);
+            assert_eq!(player.num_get_out_of_jail_cards(), 0);
+        }
+
+        g.execute_card(&card::Card::new("test", card::CardAction::JailRelease,
+                                        None, None));
+        let player = g.players.get(0).unwrap().borrow();
+        assert_eq!(player.is_in_jail(), true);
+        assert_eq!(player.num_get_out_of_jail_cards(), 1);
+    }
+
+    #[test]
+    fn execute_card_repairs() {
+        let mut g = init(vec!["A".to_string()]);
+        g.set_unit_test();
+
+        // buy a hotel
+        let mut g = init(vec!["Tycoon".to_string()]);
+        g.set_unit_test();
+        let street_idx: usize = 1;
+        let s = g.board.get(street_idx).unwrap();
+        
+        // buy indigo squares
+        g.execute_turn(Dice::new(1, 0));
+        g.execute_turn(Dice::new(2, 0));
+
+        // put houses on all squares
+        {
+            let mut owner = g.players.get(0).unwrap().borrow_mut();
+            for i in 0..4 {
+                // buy another house in Mediterranean then Baltic
+                let street_idx = 1;
+                let s = g.board.get(street_idx).unwrap();
+                actions::buy_house(&g, &mut owner, street_idx);
+
+                let street_idx = 3;
+                let s = g.board.get(street_idx).unwrap();
+                actions::buy_house(&g, &mut owner, street_idx);
+            }
+        }
+
+        // double check, both streets should have 4 houses
+        assert_eq!(g.board.get(1).unwrap().asset.borrow().house_num(), 4);
+        assert_eq!(g.board.get(3).unwrap().asset.borrow().house_num(), 4);
+
+        // buying hotels succeeds
+        let street_idx = 1;
+        let s = g.board.get(street_idx).unwrap();
+        {
+            let mut owner = g.players.get(0).unwrap().borrow_mut();
+            actions::buy_hotel(&g, &mut owner, street_idx);
+            assert_eq!(s.asset.borrow().has_hotel(), true);
+            assert_eq!(owner.cash(), 930);
+        }
+
+
+        // now calculate repairs bill for 4 houses and 1 hotel
+        g.execute_card(&card::Card::new("test", card::CardAction::Repairs,
+                                        Some(2), Some(100))); // total 108
+        {
+            let player = g.players.get(0).unwrap().borrow();
+            assert_eq!(player.cash(), 822);
+        }
+
+        g.execute_card(&card::Card::new("test", card::CardAction::Repairs,
+                                        Some(100), Some(3))); // total 403
+        let player = g.players.get(0).unwrap().borrow();
+        assert_eq!(player.cash(), 419);
     }
 }

@@ -1,11 +1,10 @@
 pub enum CardAction {
     Movement,
-//    MovementRelative, // move relative to starting square
+    RelativeMovement,
     Payment,
-//    PaymentDice, // payment calculated based on dice roll
-//    PaymentPlayers, // payment calculated based on dice roll
     Jail, 
     JailRelease, 
+    Repairs 
 }
 
 /// Chance or Community chest card

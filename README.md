@@ -52,6 +52,8 @@ Monopoly clone, to help visually impaired keep track of resourcesG
 - [x] For auction, all active players can buy (incl person who couldn't afford it)
 - [x] Landing on morgaged place, do not offer to buy it
 - [x] For auction, show only active players
+- [x] Card event: Implement more cards (change as needed)
+- [x] Card event: make repairs on houses/hotels
 - [ ] If player quits, allocate money to pay debt
 - [ ] If player owes money, let player sell properties to reduce the debt
 - [ ] Chance, send to boardwalk should cause owner to receive money (if player has no money)
@@ -59,8 +61,6 @@ Monopoly clone, to help visually impaired keep track of resourcesG
 - [ ] Sell house before selling street to others
 - [ ] Allow user to control game from website
 - [ ] Push json object to webpage, and reload json every second
-- [ ] Card event: make repairs on houses/hotels
-- [ ] Card event: pay players money for birthday
 
 # S3 upload
 Currently, I hacked the s3 upload to use the AWS CLI. Credentials are stored locally, in the 'monopoly' profile

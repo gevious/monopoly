@@ -3,7 +3,6 @@ use std::io::{Write};
 
 use super::game::{Game, Dice};
 use super::square::Square;
-use super::player::Player;
 
 pub enum UserAction {
     BuyHouse,
@@ -257,7 +256,6 @@ pub fn get_street(eligible_streets: Vec<(usize, &Square)>) -> Result<usize, ()> 
     loop { // repeat until player enters a valid selection
         for (i, s) in eligible_streets.iter().enumerate() {
             let title = format!("{}. {}", i+1, s.1.name());
-            let extra: String;
             let sd = s.1.get_street_details()
                       .expect("owned streets doesn't have details");
             let extra = match s.1.asset.borrow().is_mortgaged() {
@@ -333,6 +331,7 @@ fn user_quit(user_input: &str) -> bool {
 mod tests {
     use super::*;
 
+    #[test]
     fn did_user_quit() {
         assert_eq!(user_quit("q"), true);
         assert_eq!(user_quit("Q"), true);

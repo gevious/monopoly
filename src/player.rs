@@ -219,6 +219,7 @@ impl Player {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn advance_player() {
         let ref mut p = Player::new("Test".to_string(), 1);
@@ -229,10 +230,11 @@ mod tests {
         assert_eq!(p.position, 2);
     }
 
+    #[test]
     fn check_bankrupt() {
-        let ref mut p = Player::new("Test".to_string(), 1);
-        assert_eq!(p.transact_cash(500), Ok(()));
-        assert_eq!(p.transact_cash(1000), Ok(()));
-        assert_eq!(p.transact_cash(1), Err(()));
+        let mut p = Player::new("Test".to_string(), 1);
+        assert_eq!(p.transact_cash(-500), Ok(()));
+        assert_eq!(p.transact_cash(-1000), Ok(()));
+        assert_eq!(p.transact_cash(-1), Err(()));
     }
 }

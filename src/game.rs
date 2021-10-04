@@ -108,7 +108,7 @@ mod actions {
                           street.name(), building_price);
         match dialog::yes_no(&msg) {
             false => {}, // do nothing
-            yes => {
+            true => {
                 // Now buy house
                 street.asset.borrow_mut().buy_house();
                 owner.transact_cash(-1 * (building_price as i32));
@@ -199,7 +199,7 @@ mod actions {
 
         match dialog::yes_no(&msg) {
             false => {}, // do nothing
-            yes => {
+            true  => {
                 // Now buy hotel
                 street.asset.borrow_mut().buy_hotel();
                 owner.transact_cash(-1 * (building_price as i32));
@@ -311,9 +311,7 @@ impl Game {
                     self.jail_time();
 
                     print!("Roll dice: ");
-                    let mut dice = dialog::capture_dice_roll();
-
-                    self.execute_turn(dice);
+                    self.execute_turn(dialog::capture_dice_roll());
                 }
 
                 if self.is_unit_test {
@@ -322,15 +320,12 @@ impl Game {
                 // present options of other transactions user can make
 
                 let mut is_in_trouble;
-                let mut left_game;
-                let mut turn_idx;
+                let turn_idx;
                 {
                     let player = p_ref.borrow();
                     is_in_trouble = player.is_in_trouble();
-                    left_game = player.left_game();
                     turn_idx = player.turn_idx();
                 }
-                let was_in_trouble = is_in_trouble;
 
                 while is_in_trouble {
                     // player couldn't pay for the turn.
@@ -340,23 +335,15 @@ impl Game {
 
                     self.execute_user_action(turn_idx, is_in_trouble);
 
-                    {
-                        let player = p_ref.borrow();
-                        left_game = player.left_game();
-                    }
 
                     // player still in the game, lets try run this turn again
-                    if !left_game {
-                        let mut player = p_ref.borrow_mut();
-                        // stay on same square, to see if player can pay debts
-                        self.execute_turn(Dice::new(0, 0));
-                    } else {
+                    if p_ref.borrow().left_game() {
+                        // TODO: Distribute cash (or in leave_game method)
                         break; // player has exited game
                     }
-                    {
-                        let player = p_ref.borrow();
-                        is_in_trouble = player.is_in_trouble();
-                    }
+                    // stay on same square, to see if player can pay debts
+                    self.execute_turn(Dice::new(0, 0));
+                    is_in_trouble = p_ref.borrow().is_in_trouble();
                 }
                 self.execute_user_action(turn_idx, false);
             }
@@ -792,12 +779,6 @@ impl Game {
         self.buy_property(&mut *owner, square, purchase_price)
     }
 
-    /// Update game state to unit test
-    // This mode will eliminate questions to the user that require keyboard input
-    fn set_unit_test(&mut self) {
-        self.is_unit_test = true;
-    }
-
     /// Execute action on card
     fn execute_card(&self, card: &card::Card)
             -> Result <(), ()> {
@@ -818,10 +799,6 @@ impl Game {
             },
             card::CardAction::RelativeMovement => {
                 let movement = card.square().expect("Target square should exist");
-                let p_pos = {
-                    self.players.get(self.active_player())
-                                     .unwrap().borrow_mut().position() as u32
-                };
                 return self.execute_turn(Dice::new(movement, 0));
             },
             card::CardAction::Payment => {
@@ -855,7 +832,7 @@ impl Game {
                     .fold(0, |sum, a| sum + a.borrow().house_num());
                 let hotel_num = assets.iter()
                     .filter(|a| a.borrow().has_hotel())
-                    .fold(0, |sum, a| sum + 1);
+                    .fold(0, |sum, _| sum + 1);
                 let total = (house_num * card.amount().unwrap() as u32)
                           + (hotel_num * card.square().unwrap());
                 println!("You need to pay a total of ${}", total);
@@ -947,11 +924,23 @@ impl Game {
 
     /// Sell property to another player
     fn sell_property(&self, orig_owner: &mut player::Player, new_owner: &mut player::Player,
-                     square: &square::Square, price: u32) {
+                     square: &square::Square, price: u32) -> Result<(), ()> {
 
         if new_owner.cash() < price {
             println!("{} has insufficient funds", &new_owner.name());
-            return;
+            return Err(());
+        }
+
+        // ensure street has no houses
+        if square.asset.borrow().house_num() > 0 {
+            let msg = "Confirm: Sell the street with building on it?";
+            if self.is_unit_test { // assume 'No' for unit tests
+                return Err(());
+            }
+            match super::dialog::yes_no(&msg) {
+                true => {}
+                false => return Err(()),
+            }
         }
 
         // new_owner has enough cash
@@ -961,6 +950,7 @@ impl Game {
         new_owner.transact_cash(-1 * (price as i32));
         let mut asset = square.asset.borrow_mut();
         asset.owner = Some(new_owner.turn_idx());
+        Ok(())
     }
 
     /// Purchase the property
@@ -1184,8 +1174,6 @@ impl Game {
     fn street_eligible_for_hotel(&self, street: &square::Square) -> bool {
         let street_details = street.get_street_details().unwrap();
         let suburb = street_details.get_suburb();
-        let asset = street.asset.borrow();
-        let building_num = asset.house_num();
 
         // all streets in suburb must have 4 houses or a hotel
         self.board.iter()
@@ -1479,7 +1467,7 @@ mod tests {
         {
             // back in jail
             g.execute_turn(Dice::new(20, 0));
-            let mut p = g.players.get(0).unwrap().borrow_mut();
+            let p = g.players.get(0).unwrap().borrow();
             assert_eq!(p.is_in_jail(), true);
             assert_eq!(p.num_get_out_of_jail_cards(), 0);
             assert_eq!(p.cash(), 1500);
@@ -1972,23 +1960,19 @@ mod tests {
         let mut g = init(vec!["Tycoon".to_string()]);
         g.set_unit_test();
         let street_idx: usize = 1;
-        let s = g.board.get(street_idx).unwrap();
 
-        
-        // buy indigo squares
+        // buy brown squares
         g.execute_turn(Dice::new(1, 0));
         g.execute_turn(Dice::new(2, 0));
 
         // put houses on all squares
         let mut owner = g.players.get(0).unwrap().borrow_mut();
-        for i in 0..4 {
+        for _ in 0..4 {
             // buy another house in Mediterranean then Baltic
             let street_idx = 1;
-            let s = g.board.get(street_idx).unwrap();
             actions::buy_house(&g, &mut owner, street_idx);
 
             let street_idx = 3;
-            let s = g.board.get(street_idx).unwrap();
             actions::buy_house(&g, &mut owner, street_idx);
         }
 
@@ -2029,8 +2013,6 @@ mod tests {
         let street_idx: usize = 1;
         let s = g.board.get(street_idx).unwrap();
         assert_eq!(s.asset.borrow().owner, None);
-        let rs = s.get_street_details().unwrap().rent_suburb();
-
         
         g.execute_turn(Dice::new(1, 0)); // buys mediterranean
         {
@@ -2065,7 +2047,6 @@ mod tests {
         
         // buy house on baltic
         let street_idx = 3;
-        let s = g.board.get(street_idx).unwrap();
         actions::buy_house(&g, &mut owner, street_idx);
         
         // buy second house on mediterranean
@@ -2083,7 +2064,7 @@ mod tests {
 
     #[test]
     fn roll_dice() {
-        let mut dice = Dice::new(2, 3);
+        let dice = Dice::new(2, 3);
         assert_eq!(dice.roll, (2,3)); 
         assert_eq!(dice.num_rolls, 1);
         assert_eq!(dice.cumulative_sum, 5);
@@ -2244,12 +2225,6 @@ mod tests {
         let mut g = init(vec!["A".to_string()]);
         g.set_unit_test();
 
-        // buy a hotel
-        let mut g = init(vec!["Tycoon".to_string()]);
-        g.set_unit_test();
-        let street_idx: usize = 1;
-        let s = g.board.get(street_idx).unwrap();
-        
         // buy indigo squares
         g.execute_turn(Dice::new(1, 0));
         g.execute_turn(Dice::new(2, 0));
@@ -2257,14 +2232,12 @@ mod tests {
         // put houses on all squares
         {
             let mut owner = g.players.get(0).unwrap().borrow_mut();
-            for i in 0..4 {
+            for _ in 0..4 {
                 // buy another house in Mediterranean then Baltic
                 let street_idx = 1;
-                let s = g.board.get(street_idx).unwrap();
                 actions::buy_house(&g, &mut owner, street_idx);
 
                 let street_idx = 3;
-                let s = g.board.get(street_idx).unwrap();
                 actions::buy_house(&g, &mut owner, street_idx);
             }
         }
@@ -2296,5 +2269,27 @@ mod tests {
                                         Some(100), Some(3))); // total 403
         let player = g.players.get(0).unwrap().borrow();
         assert_eq!(player.cash(), 419);
+    }
+
+    #[test]
+    fn sell_house_before_street() {
+        let mut g = init(vec!["Seller".to_string(), "Owner".to_string()]);
+        g.set_unit_test();
+        let street_idx: usize = 1;
+        let s = g.board.get(street_idx).unwrap();
+
+        // buy brown squares
+        g.execute_turn(Dice::new(1, 0));
+        g.execute_turn(Dice::new(2, 0));
+
+        //buy house
+        let mut seller = g.players.get(0).unwrap().borrow_mut();
+        let street_idx = 1;
+        actions::buy_house(&g, &mut seller, street_idx);
+
+        // selling street fails
+        let mut owner = g.players.get(1).unwrap().borrow_mut();
+        let response = g.sell_property(&mut seller, &mut owner, &s, 20);
+        assert_eq!(response, Err(()));
     }
 }

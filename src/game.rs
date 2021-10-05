@@ -261,6 +261,14 @@ impl Dice {
         }
     }
 
+    /// Zero roll
+    // This should never happen in the game. Its a special case, used when a player
+    // is in trouble and thinks trouble is averted. The game rolls a "0, 0" 
+    // to have the player stay on the same square, but replay the logic of that square
+    fn is_zeros(&self) -> bool {
+        (self.roll.0 == self.roll.1) && (self.roll.0 == 0)
+    }
+
     pub fn total(&self) -> u32 {
         self.roll.0 + self.roll.1
     }
@@ -287,6 +295,11 @@ impl Dice {
 }
 
 impl Game {
+
+    /// Set unit test flag for the game
+    pub fn set_unit_test(&mut self) {
+        self.is_unit_test = true;
+    }
 
     /// The index in the player list of the currently active player
     // This is a reference to the list of players, not the player itself
@@ -1037,6 +1050,11 @@ impl Game {
             -> Result<(), ()> {
         // rolling double has special rules
         while dice.is_double() {
+
+            if dice.is_zeros() {
+                break; // player stays on same square, to get out of trouble
+            }
+
             let mut player = self.players.get(self.active_player()).unwrap().borrow_mut();
             if player.is_in_jail(){
                 println!("YAY, you're released from jail");
@@ -2291,5 +2309,51 @@ mod tests {
         let mut owner = g.players.get(1).unwrap().borrow_mut();
         let response = g.sell_property(&mut seller, &mut owner, &s, 20);
         assert_eq!(response, Err(()));
+    }
+
+    #[test]
+    fn send_to_square_without_money() {
+        let mut g = init(vec!["Foo".to_string(), "Bar".to_string()]);
+        g.set_unit_test();
+        let street_idx: usize = 1;
+
+        g.execute_turn(Dice::new(1, 0)); // Buy Mediterranean
+        g.execute_turn(Dice::new(38, 0)); // Buy boardwalk
+
+        // Bar buy house, to reduce cash
+        {
+            let mut seller = g.players.get(0).unwrap().borrow_mut();
+            let mut buyer = g.players.get(1).unwrap().borrow_mut();
+            let street_idx = 1;
+            actions::sell_street(&g, &mut seller, &mut buyer, street_idx, 1500);
+            assert_eq!(buyer.is_in_trouble(), false);
+            assert_eq!(seller.cash(), 2540);
+        }
+
+        g.set_active_player(1);
+
+        // move to boardwalk, and owe $50 rent
+        g.execute_card(&card::Card::new("Draw Card", card::CardAction::Movement,
+                                        None, Some(39))); 
+        {
+            let p = g.players.get(1).unwrap().borrow_mut();
+            assert_eq!(p.is_in_trouble(), true);
+            assert_eq!(p.cash(), 0);
+        }
+        // sell property back for 50 to get out of trouble
+        {
+            let mut seller = g.players.get(1).unwrap().borrow_mut();
+            let mut buyer = g.players.get(0).unwrap().borrow_mut();
+            let street_idx = 1;
+            actions::sell_street(&g, &mut seller, &mut buyer, street_idx, 50);
+            assert_eq!(seller.cash(), 50);
+            assert_eq!(buyer.cash(), 2490);
+        }
+        g.execute_turn(Dice::new(0, 0)); // try get out of trouble
+        let mut seller = g.players.get(1).unwrap().borrow_mut();
+        let mut buyer = g.players.get(0).unwrap().borrow_mut();
+        assert_eq!(buyer.cash(), 2540);
+        assert_eq!(seller.cash(), 0);
+        assert_eq!(seller.is_in_trouble(), false);
     }
 }

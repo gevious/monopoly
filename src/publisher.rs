@@ -11,9 +11,10 @@ const TEMP_FILE :&str = "/tmp/index.html";
 // Prints out stats for each player
 fn print_summary(game: &Game) {
     println!("==== Summary ====");
-    for p_ref in game.players.iter() {
+    for p_ref in game.players().iter() {
         let p = p_ref.borrow();
-        let occupying_square = game.board.get(p.position())
+        let board = game.board();
+        let occupying_square = board.get(p.position())
             .expect("Player is not on the board");
         print!("{} ", p.name());
         if p.left_game() {
@@ -27,9 +28,10 @@ fn print_summary(game: &Game) {
         if p.num_get_out_of_jail_cards() > 0 {
             println!("\t has {} get-out-of-jail cards", p.num_get_out_of_jail_cards());
         }
-        let owned_streets = game.board.iter()
+        let board = game.board();
+        let owned_streets = board.iter()
             .filter(|&x| {
-                match x.asset.borrow().owner {
+                match x.asset.borrow().owner() {
                     None => false,
                     Some(owner_idx) => owner_idx == p.turn_idx()
                 }
@@ -74,9 +76,10 @@ pub fn publish(game: &Game) {
     print_summary(game);
 
     let mut sb = String::from("<h1>Monopoly</h1>");
-    for p_ref in game.players.iter() {
+    for p_ref in game.players().iter() {
         let p = p_ref.borrow();
-        let occupying_square = game.board.get(p.position())
+        let board = game.board();
+        let occupying_square = board.get(p.position())
             .expect("Player is not on the board");
         if p.left_game() {
             sb.push_str(&format!("{} has left the game", p.name()));
@@ -94,8 +97,9 @@ pub fn publish(game: &Game) {
             sb.push_str(&format!("<li>has {} get-out-of-jail cards</li>",
                                  p.num_get_out_of_jail_cards()));
       }
-        let owned_streets = game.board.iter()
-            .filter(|&x| { match x.asset.borrow().owner {
+        let board = game.board();
+        let owned_streets = board.iter()
+            .filter(|&x| { match x.asset.borrow().owner() {
                 None => false,
                 Some(owner_idx) => owner_idx == p.turn_idx()
             }})

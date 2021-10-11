@@ -14,8 +14,8 @@ mod actions {
 
     pub fn sell_street(game: &Game, orig_owner: &mut Player, new_owner: &mut Player,
                        street_idx: usize, purchase_price: u32) {
-        let square = game.board.get(street_idx)
-                         .expect("Street should exist");
+        let board = game.board();
+        let square = board.get(street_idx).expect("Street should exist");
         {
             let asset = square.asset.borrow();
             if asset.has_buildings() {
@@ -33,8 +33,8 @@ mod actions {
     }
 
     pub fn mortgage_street(game: &Game, owner: &mut Player, street_idx: usize) {
-        let square = game.board.get(street_idx)
-                         .expect("Street should exist");
+        let board = game.board();
+        let square = board.get(street_idx).expect("Street should exist");
         let mut asset = square.asset.borrow_mut();
         if asset.has_buildings() {
             println!("The street has buildings. Sell them first");
@@ -68,7 +68,7 @@ mod actions {
             },
             Some(s) => s.building_price()
         };
-        match street.asset.borrow().owner {
+        match street.asset.borrow().owner() {
             Some(i) => {
                 if i != owner.turn_idx() {
                     println!("You don't own this street");
@@ -126,7 +126,7 @@ mod actions {
             },
             Some(s) => s.building_price()
         };
-        match street.asset.borrow().owner {
+        match street.asset.borrow().owner() {
             Some(i) => {
                 if i != owner.turn_idx() {
                     println!("You don't own this street");
@@ -158,7 +158,7 @@ mod actions {
             },
             Some(s) => s.building_price()
         };
-        match street.asset.borrow().owner {
+        match street.asset.borrow().owner() {
             Some(i) => {
                 if i != owner.turn_idx() {
                     println!("You don't own this street");
@@ -217,7 +217,7 @@ mod actions {
             },
             Some(s) => s.building_price()
         };
-        match street.asset.borrow().owner {
+        match street.asset.borrow().owner() {
             Some(i) => {
                 if i != owner.turn_idx() {
                     println!("You don't own this street");
@@ -244,8 +244,8 @@ pub struct Dice {
 
 /// The structure, containing links to all parts of the game
 pub struct Game {
-    pub players: Vec<RefCell<player::Player>>,
-    pub board: [square::Square; BOARD_SIZE as usize],
+    players: Vec<RefCell<player::Player>>,
+    board: [square::Square; BOARD_SIZE as usize],
     active_player: RefCell<usize>,
     chance_cards: RefCell<Vec<card::Card>>,
     community_cards: RefCell<Vec<card::Card>>,
@@ -295,20 +295,42 @@ impl Dice {
 }
 
 impl Game {
-
     /// Set unit test flag for the game
-    pub fn set_unit_test(&mut self) {
+    fn set_unit_test(&mut self) {
         self.is_unit_test = true;
+    }
+
+    pub fn board(&self) -> &[square::Square; BOARD_SIZE as usize] {
+        &self.board
+    }
+
+    pub fn players(&self) -> &Vec<RefCell<player::Player>> {
+        &self.players
     }
 
     /// The index in the player list of the currently active player
     // This is a reference to the list of players, not the player itself
-    pub fn active_player(&self) -> usize {
+    fn active_player(&self) -> usize {
         *self.active_player.borrow()
     }
 
-    pub fn set_active_player(&self, p_idx: usize) {
+    fn set_active_player(&self, p_idx: usize) {
         self.active_player.replace(p_idx);
+    }
+
+    /// Set the next player to be active
+    pub fn next_player(&mut self) {
+        for i in 1..self.players.len() {
+            let p_idx = (*self.active_player.borrow() + 1) % self.players.len();
+            if self.players.get(p_idx).unwrap().borrow().left_game() {
+                continue;
+            }
+            self.set_active_player(p_idx);
+            return; // next active player set
+        }
+        // No active players
+        // This state should never be reached, as the game needs to end if last
+        // player leaves the game
     }
 
     /// Start the game
@@ -366,8 +388,8 @@ impl Game {
     /// Calculate rent. If the square is unowned, there is no rent
     // Calculate rent, taking into account if a player owns all streets, and the number of
     // properties on the street.
-    pub fn calculate_rent(&self, s: &square::Square, dice: Dice) -> Option<u32> {
-        let owner = match s.asset.borrow().owner {
+    fn calculate_rent(&self, s: &square::Square, dice: Dice) -> Option<u32> {
+        let owner = match s.asset.borrow().owner() {
             None => {
                 // Nobody owns this square
                 return None;
@@ -436,7 +458,7 @@ impl Game {
     }
 
     /// Give player in jail options to get out
-    pub fn jail_time(&self) {
+    fn jail_time(&self) {
         let mut player = self.players.get(self.active_player()).unwrap().borrow_mut();
         if !player.is_in_jail() {
             return;
@@ -466,7 +488,7 @@ impl Game {
                 dialog::UserAction::EndGame => {
                     // liquify assets
                     let squares = self.board.iter()
-                        .filter(|s| { match s.asset.borrow().owner {
+                        .filter(|s| { match s.asset.borrow().owner() {
                                 None => false,
                                 Some(u) => u == turn_idx
                             }
@@ -517,7 +539,7 @@ impl Game {
 
                     let eligible_streets :Vec<(usize, &square::Square)> = 
                             self.board.iter().enumerate()
-                        .filter(|(_, s)| { match s.asset.borrow().owner {
+                        .filter(|(_, s)| { match s.asset.borrow().owner() {
                                 None => false,
                                 Some(u) => u == owner_idx
                             }
@@ -572,7 +594,7 @@ impl Game {
 
                     let eligible_streets :Vec<(usize, &square::Square)> = 
                             self.board.iter().enumerate()
-                        .filter(|(_, s)| { match s.asset.borrow().owner {
+                        .filter(|(_, s)| { match s.asset.borrow().owner() {
                                 None => false,
                                 Some(u) => u == owner.turn_idx()
                             }
@@ -608,7 +630,7 @@ impl Game {
 
                     let eligible_streets :Vec<(usize, &square::Square)> = 
                             self.board.iter().enumerate()
-                        .filter(|(_, s)| { match s.asset.borrow().owner {
+                        .filter(|(_, s)| { match s.asset.borrow().owner() {
                                 None => false,
                                 Some(o) => o == owner.turn_idx()
                             }
@@ -641,7 +663,7 @@ impl Game {
 
                     let eligible_streets :Vec<(usize, &square::Square)> = 
                             self.board.iter().enumerate()
-                        .filter(|(_, s)| { match s.asset.borrow().owner {
+                        .filter(|(_, s)| { match s.asset.borrow().owner() {
                                 None => false,
                                 Some(u) => u == owner.turn_idx()
                             }
@@ -677,7 +699,7 @@ impl Game {
 
                     let eligible_streets :Vec<(usize, &square::Square)> = 
                             self.board.iter().enumerate()
-                        .filter(|(_, s)| { match s.asset.borrow().owner {
+                        .filter(|(_, s)| { match s.asset.borrow().owner() {
                                 None => false,
                                 Some(u) => u == owner.turn_idx()
                             }
@@ -713,7 +735,7 @@ impl Game {
 
                     let eligible_streets :Vec<(usize, &square::Square)> = 
                             self.board.iter().enumerate()
-                        .filter(|(_, s)| { match s.asset.borrow().owner {
+                        .filter(|(_, s)| { match s.asset.borrow().owner() {
                                 None => false,
                                 Some(u) => u == owner.turn_idx()
                             }
@@ -744,7 +766,7 @@ impl Game {
                                         .unwrap().borrow_mut();
 
                     let eligible_streets :Vec<(usize, &square::Square)> = self.board.iter().enumerate()
-                        .filter(|(_, s)| { match s.asset.borrow().owner {
+                        .filter(|(_, s)| { match s.asset.borrow().owner() {
                                 None => false,
                                 Some(u) => u == owner.turn_idx()
                             }
@@ -834,7 +856,7 @@ impl Game {
                 let mut player = self.players.get(self.active_player())
                                      .unwrap().borrow_mut();
                 let assets = self.board.iter()
-                    .filter(|s| match s.asset.borrow().owner {
+                    .filter(|s| match s.asset.borrow().owner() {
                         None => false,
                         Some(o) => o == player.turn_idx()
                     })
@@ -859,7 +881,7 @@ impl Game {
     fn get_player_owned_squares(&self, player_idx: usize) -> Vec<&square::Square> {
         let mut squares = Vec::<&square::Square>::new();
         for s in self.board.iter() {
-            match s.asset.borrow().owner {
+            match s.asset.borrow().owner() {
                 Some(owner_idx) => {
                     if owner_idx == player_idx {
                         squares.push(&s);
@@ -962,7 +984,7 @@ impl Game {
         orig_owner.transact_cash(price as i32);
         new_owner.transact_cash(-1 * (price as i32));
         let mut asset = square.asset.borrow_mut();
-        asset.owner = Some(new_owner.turn_idx());
+        asset.set_owner(new_owner.turn_idx());
         Ok(())
     }
 
@@ -975,7 +997,7 @@ impl Game {
             return Err(()); // should never happen, since price check was done already
         };
         let mut asset = square.asset.borrow_mut();
-        asset.owner = Some(new_owner.turn_idx());
+        asset.set_owner(new_owner.turn_idx());
         Ok(())
     }
 
@@ -984,7 +1006,7 @@ impl Game {
             -> Result<(), ()> {
         let square = self.get_player_square(); 
         println!("You landed on {}", square.name());
-        let has_owner = match square.asset.borrow().owner {
+        let has_owner = match square.asset.borrow().owner() {
             Some(_) => true,
             None => false
         };
@@ -1016,7 +1038,7 @@ impl Game {
             },
             true => { // Owned asset
                 let asset = square.asset.borrow();
-                let owner_idx = asset.owner.unwrap();
+                let owner_idx = asset.owner().unwrap();
                 let mut player = self.players.get(self.active_player())
                     .unwrap().borrow_mut();
                 if owner_idx == player.turn_idx() {
@@ -1120,7 +1142,7 @@ impl Game {
 
     /// Calculate if a player owns all streets in the suburb
     fn player_owns_suburb(&self, player_idx: usize, street: &square::Square) -> bool {
-        match street.asset.borrow().owner {
+        match street.asset.borrow().owner() {
             None    => return false, // nobody own this street
             Some(o) => {
                 if o != player_idx {
@@ -1135,7 +1157,7 @@ impl Game {
                     Some(sd) => sd.get_suburb() == suburb,
                     None => false
                 })
-            .filter(|s| match s.asset.borrow().owner {
+            .filter(|s| match s.asset.borrow().owner() {
                     Some(o) => o != player_idx, // others own this
                     None    => true // nobody owns this
                 })
@@ -1604,7 +1626,7 @@ mod tests {
         let mut g = init(vec!["StreetOwner".to_string()]);
         g.set_unit_test();
         let s = g.board.get(3).unwrap();
-        assert_eq!(s.asset.borrow().owner, None);
+        assert_eq!(s.asset.borrow().owner(), None);
 
         g.execute_turn(Dice::new(3, 0)); // Owner moves to Baltic Avenue
 
@@ -1620,7 +1642,7 @@ mod tests {
                           "StreetRenter".to_string()]);
         g.set_unit_test();
         let s = g.board.get(3).unwrap();
-        assert_eq!(s.asset.borrow().owner, None);
+        assert_eq!(s.asset.borrow().owner(), None);
 
         // Buy the following squares:
         // Baltic Avenue[3] (1 of set of 2)
@@ -1725,13 +1747,13 @@ mod tests {
         let mut g = init(vec!["Owner".to_string(), "Renter".to_string()]);
         g.set_unit_test();
         let s = g.board.get(3).unwrap();
-        assert_eq!(s.asset.borrow().owner, None);
+        assert_eq!(s.asset.borrow().owner(), None);
 
         g.execute_turn(Dice::new(3, 0)); // Owner moves to Baltic Avenue
         {
             let owner = g.players.get(0).unwrap().borrow();
             assert_eq!(owner.cash(), 1440); // bought street
-            assert_eq!(s.asset.borrow().owner.unwrap(), owner.turn_idx());
+            assert_eq!(s.asset.borrow().owner().unwrap(), owner.turn_idx());
         }
 
         g.set_active_player(1);
@@ -1747,26 +1769,26 @@ mod tests {
         let mut g = init(vec!["Mongul".to_string()]);
         g.set_unit_test();
         let s = g.board.get(3).unwrap();
-        assert_eq!(s.asset.borrow().owner, None);
+        assert_eq!(s.asset.borrow().owner(), None);
 
         g.execute_turn(Dice::new(3, 0)); // Mongul moves to Baltic Avenue
         {
             let p = g.players.get(0).unwrap().borrow();
             assert_eq!(p.cash(), 1440); // bought street
-            assert_eq!(s.asset.borrow().owner.unwrap(), p.turn_idx());
+            assert_eq!(s.asset.borrow().owner().unwrap(), p.turn_idx());
         }
 
         g.execute_turn(Dice::new(9, 0)); // Mongul moves to Electric Company
         {
             let p = g.players.get(0).unwrap().borrow();
             assert_eq!(p.cash(), 1290); // bought street
-            assert_eq!(s.asset.borrow().owner.unwrap(), p.turn_idx());
+            assert_eq!(s.asset.borrow().owner().unwrap(), p.turn_idx());
         }
 
         g.execute_turn(Dice::new(3, 0)); // Mongul moves to Pennsylvania Railroad
         let p = g.players.get(0).unwrap().borrow();
         assert_eq!(p.cash(), 1090); // bought street
-        assert_eq!(s.asset.borrow().owner.unwrap(), p.turn_idx());
+        assert_eq!(s.asset.borrow().owner().unwrap(), p.turn_idx());
     }
 
     #[test]
@@ -1774,18 +1796,18 @@ mod tests {
         let mut g = init(vec!["Seller".to_string(), "NewOwner".to_string()]);
         g.set_unit_test();
         let s = g.board.get(3).unwrap();
-        assert_eq!(s.asset.borrow().owner, None);
+        assert_eq!(s.asset.borrow().owner(), None);
 
         g.execute_turn(Dice::new(3, 0)); // Seller moves to Baltic Avenue
         let mut seller = g.players.get(0).unwrap().borrow_mut();
         assert_eq!(seller.cash(), 1440); // bought street
-        assert_eq!(s.asset.borrow().owner.unwrap(), seller.turn_idx());
+        assert_eq!(s.asset.borrow().owner().unwrap(), seller.turn_idx());
 
         let mut owner = g.players.get(1).unwrap().borrow_mut();
         g.sell_property(&mut seller, &mut owner, &s, 20);
         assert_eq!(owner.cash(), 1480);
         assert_eq!(seller.cash(), 1460);
-        assert_eq!(s.asset.borrow().owner.unwrap(), owner.turn_idx());
+        assert_eq!(s.asset.borrow().owner().unwrap(), owner.turn_idx());
     }
 
     #[test]
@@ -1794,21 +1816,21 @@ mod tests {
         g.set_unit_test();
         let street_idx: usize = 3;
         let s = g.board.get(street_idx).unwrap();
-        assert_eq!(s.asset.borrow().owner, None);
+        assert_eq!(s.asset.borrow().owner(), None);
 
         g.execute_turn(Dice::new(3, 0)); // Seller moves to Baltic Avenue
         let mut owner = g.players.get(0).unwrap().borrow_mut();
         assert_eq!(owner.cash(), 1440); // bought street
-        assert_eq!(s.asset.borrow().owner.unwrap(), owner.turn_idx());
+        assert_eq!(s.asset.borrow().owner().unwrap(), owner.turn_idx());
 
         actions::mortgage_street(&g, &mut owner, street_idx);
         assert_eq!(owner.cash(), 1470); // mortgage of 30
-        assert_eq!(s.asset.borrow().owner.unwrap(), owner.turn_idx());
+        assert_eq!(s.asset.borrow().owner().unwrap(), owner.turn_idx());
         assert_eq!(s.asset.borrow().is_mortgaged(), true);
 
         actions::unmortgage_street(&g, &mut owner, street_idx);
         assert_eq!(owner.cash(), 1437); // unmortgage for 33
-        assert_eq!(s.asset.borrow().owner.unwrap(), owner.turn_idx());
+        assert_eq!(s.asset.borrow().owner().unwrap(), owner.turn_idx());
         assert_eq!(s.asset.borrow().is_mortgaged(), false);
     }
 
@@ -1850,7 +1872,7 @@ mod tests {
         g.set_unit_test();
         let street_idx: usize = 1;
         let s = g.board.get(street_idx).unwrap();
-        assert_eq!(s.asset.borrow().owner, None);
+        assert_eq!(s.asset.borrow().owner(), None);
 
         g.execute_turn(Dice::new(1, 0)); // Seller moves to Mediterranean Avenue
         {
@@ -1885,7 +1907,7 @@ mod tests {
         g.set_unit_test();
         let street_idx: usize = 1;
         let s = g.board.get(street_idx).unwrap();
-        assert_eq!(s.asset.borrow().owner, None);
+        assert_eq!(s.asset.borrow().owner(), None);
         let rs = s.get_street_details().unwrap().rent_suburb();
 
         g.execute_turn(Dice::new(1, 0)); // Seller moves to Mediterranean Avenue
@@ -1951,7 +1973,7 @@ mod tests {
         g.set_unit_test();
         let street_idx: usize = 1;
         let s = g.board.get(street_idx).unwrap();
-        assert_eq!(s.asset.borrow().owner, None);
+        assert_eq!(s.asset.borrow().owner(), None);
 
         // buy Brown suburb
         g.execute_turn(Dice::new(1, 0)); // Seller moves to Mediterranean Avenue
@@ -2030,7 +2052,7 @@ mod tests {
         g.set_unit_test();
         let street_idx: usize = 1;
         let s = g.board.get(street_idx).unwrap();
-        assert_eq!(s.asset.borrow().owner, None);
+        assert_eq!(s.asset.borrow().owner(), None);
         
         g.execute_turn(Dice::new(1, 0)); // buys mediterranean
         {
@@ -2130,7 +2152,7 @@ mod tests {
 
         {
             g.execute_turn(Dice::new(1, 2)); // buy baltic
-            assert_eq!(street.asset.borrow().owner.unwrap(), 0);
+            assert_eq!(street.asset.borrow().owner().unwrap(), 0);
             // mortgage Baltic
             let mut player = g.players.get(0).unwrap().borrow_mut();
             actions::mortgage_street(&g, &mut player, street_idx);
@@ -2141,7 +2163,7 @@ mod tests {
         g.set_active_player(1);
         g.execute_turn(Dice::new(1, 2)); // land on baltic
         let player = g.players.get(1).unwrap().borrow();
-        assert_eq!(street.asset.borrow().owner.unwrap(), 0);
+        assert_eq!(street.asset.borrow().owner().unwrap(), 0);
         assert_eq!(player.cash(), 1500);
     }
 

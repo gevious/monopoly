@@ -174,7 +174,7 @@ pub fn get_player_idx(game: &Game, player: Option<usize>, msg: &str)
     // Do not print current player
 
     let mut valid_options = Vec::<usize>::new();
-    for (i, p) in game.players.iter().enumerate() {
+    for (i, p) in game.players().iter().enumerate() {
         if p.borrow().left_game() { continue; }; // ignore players who've left the game
         if player.is_some() {
             if player.unwrap() == i { continue; };

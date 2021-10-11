@@ -1,5 +1,5 @@
 pub struct Asset {
-    pub owner: Option<usize>, // usize is a reference to a players turn_idx
+    owner: Option<usize>, // usize is a reference to a players turn_idx
     house_num: u32,
     has_hotel: bool,
     is_mortgaged: bool
@@ -25,6 +25,14 @@ impl Asset {
             has_hotel: false,
             is_mortgaged: false
         }
+    }
+
+    pub fn owner(&self) -> Option<usize> {
+        self.owner
+    }
+
+    pub fn set_owner(&mut self, owner: usize) {
+        self.owner = Some(owner);
     }
 
     pub fn is_mortgaged(&self) -> bool {

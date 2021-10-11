@@ -319,7 +319,7 @@ impl Game {
     }
 
     /// Set the next player to be active
-    pub fn next_player(&mut self) {
+    pub fn next_player(&self) {
         for i in 1..self.players.len() {
             let p_idx = (*self.active_player.borrow() + 1) % self.players.len();
             if self.players.get(p_idx).unwrap().borrow().left_game() {
@@ -328,59 +328,62 @@ impl Game {
             self.set_active_player(p_idx);
             return; // next active player set
         }
-        // No active players
-        // This state should never be reached, as the game needs to end if last
-        // player leaves the game
+        panic!("No players left in the game");
     }
 
     /// Start the game
     pub fn start(self) {
         loop {
-            for (p_idx, p_ref) in self.players.iter().enumerate() {
-                self.set_active_player(p_idx);
-                {
-                    if p_ref.borrow().left_game() {
-                        continue;
-                    }
-                    println!("\n=== {}, Your turn ===", p_ref.borrow().name());
-                    self.jail_time();
+            let p_ref = self.players.get(self.active_player()).unwrap();
+            if p_ref.borrow().left_game() {
+                continue;
+            }
+            println!("\n=== {}, Your turn ===", p_ref.borrow().name());
+            self.jail_time();
 
-                    print!("Roll dice: ");
-                    self.execute_turn(dialog::capture_dice_roll());
-                }
+            print!("Roll dice: ");
+            self.execute_turn(dialog::capture_dice_roll());
 
-                if self.is_unit_test {
-                    continue;
-                }
-                // present options of other transactions user can make
+            if self.is_unit_test {
+                continue;
+            }
+            // present options of other transactions user can make
 
-                let mut is_in_trouble;
-                let turn_idx;
-                {
-                    let player = p_ref.borrow();
-                    is_in_trouble = player.is_in_trouble();
-                    turn_idx = player.turn_idx();
-                }
+            self.get_out_of_trouble();
+            self.execute_user_action();
+            self.next_player();
+            // TODO: We need an elegant way to end the game,
+            // otherwise next_player will panic
+        }
+    }
 
-                while is_in_trouble {
-                    // player couldn't pay for the turn.
-                    // Player must now sell assets for cash
-                    println!("Uh oh! You don't have enough money to continue.");
-                    println!("You can sell assets, or leave the game");
+    fn get_out_of_trouble(&self) {
+        let p_ref = self.players.get(self.active_player()).unwrap();
+        let is_in_trouble;
+        let turn_idx;
+        {
+            let player = p_ref.borrow();
+            is_in_trouble = player.is_in_trouble();
+            turn_idx = player.turn_idx();
+        }
 
-                    self.execute_user_action(turn_idx, is_in_trouble);
+        while is_in_trouble {
+            // player couldn't pay for the turn.
+            // Player must now sell assets for cash
+            println!("Uh oh! You don't have enough money to continue.");
+            println!("You can sell assets, or leave the game");
 
+            self.execute_user_action();
 
-                    // player still in the game, lets try run this turn again
-                    if p_ref.borrow().left_game() {
-                        // TODO: Distribute cash (or in leave_game method)
-                        break; // player has exited game
-                    }
-                    // stay on same square, to see if player can pay debts
-                    self.execute_turn(Dice::new(0, 0));
-                    is_in_trouble = p_ref.borrow().is_in_trouble();
-                }
-                self.execute_user_action(turn_idx, false);
+            // player still in the game, lets try run this turn again
+            if p_ref.borrow().left_game() {
+                // TODO: Distribute cash (or in leave_game method)
+                break; // player has exited game
+            }
+            // stay on same square, to see if player can pay debts
+            self.execute_turn(Dice::new(0, 0));
+            if !p_ref.borrow().is_in_trouble() {
+                break; // out of trouble
             }
         }
     }
@@ -477,7 +480,16 @@ impl Game {
         }
     }
 
-    fn execute_user_action(&self, turn_idx: usize, is_in_trouble: bool) {
+    /// Execute user's menu selection
+    fn execute_user_action(&self) {
+        let p_ref = self.players.get(self.active_player()).unwrap();
+        let is_in_trouble;
+        let turn_idx;
+        {
+            let player = p_ref.borrow();
+            is_in_trouble = player.is_in_trouble();
+            turn_idx = player.turn_idx();
+        }
         loop {
             publisher::publish(&self);
             let option = match is_in_trouble {
@@ -1321,9 +1333,9 @@ pub fn init(player_names: Vec::<String>) -> Game {
 
     Game {
         players,
+        active_player: RefCell::new(0),
         chance_cards: RefCell::new(load_chance_cards()),
         community_cards: RefCell::new(load_community_chest_cards()),
-        active_player: RefCell::new(0),
         board: load_squares(),
         is_unit_test: false
     }

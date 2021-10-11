@@ -57,6 +57,7 @@ Monopoly clone, to help visually impaired keep track of resourcesG
 - [x] When chance, advance to go, don't get paid double
 - [x] Confirm player wants to sell street with buildings
 - [x] Chance, send to boardwalk should cause owner to receive money (if player has no money)
+- [ ] Go back 3 spaces shouldn't pass begin
 - [ ] If player quits, allocate money to pay debt
 - [ ] If player owes money, let player sell properties to reduce the debt
 - [ ] Allow user to control game from website

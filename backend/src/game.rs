@@ -310,7 +310,7 @@ impl Game {
 
     /// The index in the player list of the currently active player
     // This is a reference to the list of players, not the player itself
-    fn active_player(&self) -> usize {
+    pub fn active_player(&self) -> usize {
         *self.active_player.borrow()
     }
 
@@ -319,8 +319,8 @@ impl Game {
     }
 
     /// Set the next player to be active
-    pub fn next_player(&self) {
-        for i in 1..self.players.len() {
+    fn next_player(&self) {
+        for _ in 1..self.players.len() {
             let p_idx = (*self.active_player.borrow() + 1) % self.players.len();
             if self.players.get(p_idx).unwrap().borrow().left_game() {
                 continue;
@@ -331,12 +331,12 @@ impl Game {
         panic!("No players left in the game");
     }
 
-    /// Start the game
+    /// Start the game for the command line interface
     pub fn start(self) {
         loop {
             let p_ref = self.players.get(self.active_player()).unwrap();
             if p_ref.borrow().left_game() {
-                continue;
+                return;
             }
             println!("\n=== {}, Your turn ===", p_ref.borrow().name());
             self.jail_time();
@@ -345,7 +345,7 @@ impl Game {
             self.execute_turn(dialog::capture_dice_roll());
 
             if self.is_unit_test {
-                continue;
+                return;
             }
             // present options of other transactions user can make
 
@@ -355,6 +355,34 @@ impl Game {
             // TODO: We need an elegant way to end the game,
             // otherwise next_player will panic
         }
+    }
+
+    /// Complete a turn from the web client
+    pub fn go(&self, mut dice: Dice) {
+        // FIXME Ensure no players are in trouble
+
+        // FIXME: Change method to pass in player throwing the dice
+        // For now, we just move to the next player
+
+        // FIXME: This will need some work to cater for the web client
+        let p_ref = self.players.get(self.active_player()).unwrap();
+        if p_ref.borrow().left_game() {
+            return;
+        }
+        println!("\n=== {}, Your turn ===", p_ref.borrow().name());
+        self.jail_time();
+
+        self.execute_turn(dice);
+
+        // present options of other transactions user can make
+
+        // FIXME: web client should be able to support actions, and getting
+        // player out of trouble
+        self.get_out_of_trouble();
+        self.execute_user_action();
+        self.next_player();
+        // TODO: We need an elegant way to end the game,
+        // otherwise next_player will panic
     }
 
     fn get_out_of_trouble(&self) {

@@ -2,9 +2,22 @@
 Monopoly clone, to help visually impaired keep track of resourcesG
 
 # Getting Started
-- clone the repo
-- run `cargo run --example play` to start the game
-- run `cargo test` to build and run unit tests
+First, you'll need to clone the repo onto your local machine.
+## Backend
+```
+cd backend
+cargo run --example web
+```
+
+## Frontend
+```
+cd web-app
+yarn start
+```
+
+## Browser
+Browse to `localhost:3000` to see the application running.
+
 
 # Roadmap 
 - [x] Infinite loop asking for dice roll
@@ -62,6 +75,13 @@ Monopoly clone, to help visually impaired keep track of resourcesG
 - [ ] If player owes money, let player sell properties to reduce the debt
 - [ ] Allow user to control game from website
 - [ ] Push json object to webpage, and reload json every second
+
+## Backend 
+- [ ] Make game state mutable across sessions
+- [ ] Design game data structure for display in frontend
+- [ ] Pass game data back to frontend for every roll
+- [ ] Create endpoint for actions
+- [ ] Implement actions
 
 # S3 upload
 Currently, I hacked the s3 upload to use the AWS CLI. Credentials are stored locally, in the 'monopoly' profile

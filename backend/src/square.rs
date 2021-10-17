@@ -139,6 +139,5 @@ impl Square {
                 _ => 0 // Error, should never happen
         }
     }
-
 }
 

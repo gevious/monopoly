@@ -9,10 +9,21 @@ cd backend
 cargo run --example web
 ```
 
+To run on a different IP address do:
+```
+ROCKET_ADDRESS=127.0.0.1 cargo run --example web
+```
+
+
 ## Frontend
 ```
 cd web-app
 yarn start
+```
+
+To run on a different IP address do:
+```
+HOST=127.0.0.1 yarn start
 ```
 
 ## Browser
@@ -77,7 +88,8 @@ Browse to `localhost:3000` to see the application running.
 - [ ] Push json object to webpage, and reload json every second
 
 ## Backend 
-- [ ] Make game state mutable across sessions
+- [x] Make game state mutable across sessions
+- [x] Demo frontend works from ipad in dev setup
 - [ ] Design game data structure for display in frontend
 - [ ] Pass game data back to frontend for every roll
 - [ ] Create endpoint for actions

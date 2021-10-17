@@ -17,7 +17,7 @@ function RollDice() {
 
 		const data:DiceRoll = {dice1: dice1, dice2: dice2};
 		axios({
-			url: "http://localhost:8000/roll-dice",
+			url: "http://192.168.0.119:8000/roll-dice",
 			method: "post",
 			data: data
 		}).then(res => {

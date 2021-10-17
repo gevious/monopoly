@@ -249,7 +249,9 @@ pub struct Game {
     active_player: RefCell<usize>,
     chance_cards: RefCell<Vec<card::Card>>,
     community_cards: RefCell<Vec<card::Card>>,
-    is_unit_test: bool
+    is_unit_test: bool,
+    is_cli: RefCell<bool>,
+    journal: RefCell<String> // the turn described in text
 }
 
 impl Dice {
@@ -300,6 +302,11 @@ impl Game {
         self.is_unit_test = true;
     }
 
+    /// Set CLI flag, to print out statements to console as they happen
+    pub fn set_is_cli(&self) {
+        self.is_cli.replace(true);
+    }
+
     pub fn board(&self) -> &[square::Square; BOARD_SIZE as usize] {
         &self.board
     }
@@ -318,6 +325,22 @@ impl Game {
         self.active_player.replace(p_idx);
     }
 
+    pub fn journal(&self) -> String {
+        self.journal.borrow().to_string()
+    }
+
+    /// Update game journal with another entry
+    pub fn update_journal(&self, entry: String) {
+        let mut j = self.journal.borrow_mut();
+        match j.len() {
+            0 => j.push_str(&format!("{}", entry)),
+            _ => j.push_str(&format!("\n{}", entry))
+        };
+        if *self.is_cli.borrow() {
+            println!("{}", entry); 
+        }
+    }
+
     /// Set the next player to be active
     fn next_player(&self) {
         for _ in 1..self.players.len() {
@@ -334,6 +357,8 @@ impl Game {
     /// Start the game for the command line interface
     pub fn start(self) {
         loop {
+            // New active player, therefore new journal
+            self.journal.replace(String::new());
             let p_ref = self.players.get(self.active_player()).unwrap();
             if p_ref.borrow().left_game() {
                 return;
@@ -359,6 +384,9 @@ impl Game {
 
     /// Complete a turn from the web client
     pub fn go(&self, mut dice: Dice) {
+        // New active player, therefore new journal
+        self.journal.replace(String::new());
+
         // FIXME Ensure no players are in trouble
 
         // FIXME: Change method to pass in player throwing the dice
@@ -369,7 +397,8 @@ impl Game {
         if p_ref.borrow().left_game() {
             return;
         }
-        println!("\n=== {}, Your turn ===", p_ref.borrow().name());
+        self.update_journal(
+            format!("\n{}'s, turn", p_ref.borrow().name()));
         self.jail_time();
 
         self.execute_turn(dice);
@@ -398,8 +427,10 @@ impl Game {
         while is_in_trouble {
             // player couldn't pay for the turn.
             // Player must now sell assets for cash
-            println!("Uh oh! You don't have enough money to continue.");
-            println!("You can sell assets, or leave the game");
+            self.update_journal(
+                format!("Uh oh! You don't have enough money to continue."));
+            self.update_journal(
+                format!("You can sell assets, or leave the game"));
 
             self.execute_user_action();
 
@@ -477,9 +508,7 @@ impl Game {
                         street_details.rent_suburb()[idx]
                     },
                     _ => {
-                        // Panic!
-                        println!("Oops! Error in calculating rent");
-                        0
+                        panic!("Oops! Error in calculating rent");
                     }
                 }
             }
@@ -495,7 +524,8 @@ impl Game {
             return;
         }
         if player.redeem_jail_free_card().is_ok() {
-            println!("Yay, No More Jail, thanks to your get-out-of-jail-free card");
+            self.update_journal(
+                format!("Yay, No More Jail, thanks to your get-out-of-jail-free card"));
             return;
         };
         let pay_cash = match self.is_unit_test {
@@ -558,7 +588,8 @@ impl Game {
                         _ => {} // do nothing
                     };
 
-                    println!("== Game Over! {} ==", player.name());
+                    self.update_journal(
+                        format!("== Game Over! {} ==", player.name()));
                     break;
                 },
                 dialog::UserAction::EndTurn => return,
@@ -857,7 +888,8 @@ impl Game {
     /// Execute action on card
     fn execute_card(&self, card: &card::Card)
             -> Result <(), ()> {
-        println!("{}", card.description());
+        self.update_journal(
+            format!("{}", card.description()));
         match card.action() {
             card::CardAction::Movement =>  {
                 // calculate the dice number based on square
@@ -910,7 +942,8 @@ impl Game {
                     .fold(0, |sum, _| sum + 1);
                 let total = (house_num * card.amount().unwrap() as u32)
                           + (hotel_num * card.square().unwrap());
-                println!("You need to pay a total of ${}", total);
+                self.update_journal(
+                    format!("You need to pay a total of ${}", total));
                 return player.transact_cash(-1 * total as i32);
             }
         }
@@ -941,7 +974,8 @@ impl Game {
         if player.position() == 30 {
             player.go_to_jail();
         } else {
-            println!("{}", square.name());
+            self.update_journal(
+                format!("{}", square.name()));
         }
         Ok(())
     }
@@ -950,19 +984,22 @@ impl Game {
         let mut player = self.players.get(self.active_player()).unwrap().borrow_mut();
         match player.position() {
             4 => {
-                println!("Oh No! Pay $200 in Income Tax!");
+                self.update_journal(
+                    format!("Oh No! Pay $200 in Income Tax!"));
                 player.transact_cash(-200)
             },
             38 => {
-                println!("Oh No! Pay $100 in Luxury Tax!");
+                self.update_journal(
+                    format!("Oh No! Pay $100 in Luxury Tax!"));
                 player.transact_cash(-100)
             }
-            _ => {println!("Error, undefined Tax"); Ok(()) }
+            _ => panic!("Error, undefined Tax")
         }
     }
 
     fn execute_square_community(&self) -> Result<(), ()> {
-        println!("COMMUNITY CHEST!");
+        self.update_journal(
+            format!("COMMUNITY CHEST!"));
         let mut cards = self.community_cards.borrow_mut();
         let card = cards.remove(0);
         match self.execute_card(&card) {
@@ -980,7 +1017,8 @@ impl Game {
     }
 
     fn execute_square_chance(&self) -> Result<(), ()> {
-        println!("CHANCE!");
+        self.update_journal(
+            format!("CHANCE!"));
         let mut cards = self.chance_cards.borrow_mut();
         let card = cards.remove(0);
         match self.execute_card(&card) {
@@ -1002,7 +1040,8 @@ impl Game {
                      square: &square::Square, price: u32) -> Result<(), ()> {
 
         if new_owner.cash() < price {
-            println!("{} has insufficient funds", &new_owner.name());
+            self.update_journal(
+                format!("{} has insufficient funds", &new_owner.name()));
             return Err(());
         }
 
@@ -1019,8 +1058,9 @@ impl Game {
         }
 
         // new_owner has enough cash
-        println!("{} sells {} to {} for ${}",
-                 orig_owner.name(), square.name(), new_owner.name(), price);
+        self.update_journal(
+            format!("{} sells {} to {} for ${}",
+                 orig_owner.name(), square.name(), new_owner.name(), price));
         orig_owner.transact_cash(price as i32);
         new_owner.transact_cash(-1 * (price as i32));
         let mut asset = square.asset.borrow_mut();
@@ -1032,7 +1072,8 @@ impl Game {
     fn buy_property(&self, new_owner: &mut player::Player,
                     square: &square::Square, price: u32) -> Result<(), ()> {
         // buying from scratch
-        println!("You buy {} for ${}", square.name(), price);
+        self.update_journal(
+            format!("You buy {} for ${}", square.name(), price));
         if new_owner.transact_cash(-1 * (price as i32)).is_err() {
             return Err(()); // should never happen, since price check was done already
         };
@@ -1045,7 +1086,7 @@ impl Game {
     fn execute_square_property(&self, dice: Dice) 
             -> Result<(), ()> {
         let square = self.get_player_square(); 
-        println!("You landed on {}", square.name());
+        self.update_journal(format!("You landed on {}", square.name()));
         let has_owner = match square.asset.borrow().owner() {
             Some(_) => true,
             None => false
@@ -1062,11 +1103,13 @@ impl Game {
                 let player_cash = self.players.get(self.active_player())
                     .unwrap().borrow().cash();
                 if player_cash < square.get_price() {
-                    println!("You can't afford to buy this street.");
+                    self.update_journal(
+                        format!("You can't afford to buy this street."));
                     return self.auction(square);
                 }
                 let message = format!("Do you want to buy {} for ${}?",
                                       square.name(), square.get_price());
+                self.update_journal(format!("{}", message));
                 match super::dialog::yes_no(&message) {
                     true => {
                         let mut player = self.players.get(self.active_player())
@@ -1082,19 +1125,22 @@ impl Game {
                 let mut player = self.players.get(self.active_player())
                     .unwrap().borrow_mut();
                 if owner_idx == player.turn_idx() {
-                    println!("Phew! Luckily it's yours");
+                    self.update_journal(
+                        format!("Phew! Luckily it's yours"));
                     return Ok(());
                 }
 
                 if asset.is_mortgaged() {
-                    println!("Phew! {} is mortgaged, so no rent is due", square.name());
+                    self.update_journal(
+                        format!("Phew! {} is mortgaged, so no rent is due", square.name()));
                     return Ok(());
                 }
                 let rent = self.calculate_rent(square, dice).expect("Rent should exist");
 
                 let mut owner = self.players.get(owner_idx)
                     .expect("Owner should exist").borrow_mut();
-                println!("Oh no! You pay ${} to {}", rent, owner.name());
+                self.update_journal(
+                    format!("Oh no! You pay ${} to {}", rent, owner.name()));
                 if player.transact_cash(-1 * (rent as i32)).is_err() {
                     return Err(()); // player is now in trouble
                 };
@@ -1119,7 +1165,8 @@ impl Game {
 
             let mut player = self.players.get(self.active_player()).unwrap().borrow_mut();
             if player.is_in_jail(){
-                println!("YAY, you're released from jail");
+                self.update_journal(
+                    format!("YAY, you're released from jail"));
                 player.leave_jail();
                 break;
             }
@@ -1130,7 +1177,8 @@ impl Game {
             }
 
             // rolled a double
-            println!("A double. Roll again");
+            self.update_journal(
+                format!("A double. Roll again"));
             let d = match self.is_unit_test {
                 true => Dice::new(10, 20), // random roll
                 false => dialog::capture_dice_roll()
@@ -1150,7 +1198,8 @@ impl Game {
             player.advance(dice.cumulative_sum(), BOARD_SIZE);
 
             if player.position() < old_pos {
-                println!("Yay! You pass begin and collect $200");
+                self.update_journal(
+                    format!("Yay! You pass begin and collect $200"));
                 player.transact_cash(200);
             }
         }
@@ -1365,7 +1414,9 @@ pub fn init(player_names: Vec::<String>) -> Game {
         chance_cards: RefCell::new(load_chance_cards()),
         community_cards: RefCell::new(load_community_chest_cards()),
         board: load_squares(),
-        is_unit_test: false
+        is_unit_test: false,
+        is_cli: RefCell::new(false),
+        journal: RefCell::new(String::new())
     }
 }
 
@@ -2417,5 +2468,18 @@ mod tests {
         assert_eq!(buyer.cash(), 2540);
         assert_eq!(seller.cash(), 0);
         assert_eq!(seller.is_in_trouble(), false);
+    }
+
+    #[test]
+    fn joural_works() {
+        let mut g = init(vec!["Foo".to_string(), "Bar".to_string()]);
+        g.set_unit_test();
+        let street_idx: usize = 1;
+
+        g.execute_turn(Dice::new(1, 2)); // Buy Baltic
+        // There should be a journal entry
+        println!("{}", g.journal());
+        assert_eq!(g.journal(),
+        "You landed on Baltic Avenue\nYou buy Baltic Avenue for $60");
     }
 }

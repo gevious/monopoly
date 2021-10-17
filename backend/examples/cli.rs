@@ -66,6 +66,7 @@ fn main() {
     let player_num = capture_player_num();
     let players = capture_names(player_num);
     let game = game::init(players);
+    game.set_is_cli();
     game.start();
 }
 

@@ -3,7 +3,30 @@ import './App.css';
 import { DiceRoll} from './types/types';
 import axios from 'axios';
 
-function RollDice() {
+interface JournalProp {
+    msg: string;
+}
+
+interface RollDiceProp {
+    setGameJournal: any;
+    setPlayerName: any;
+    playerName: string;
+}
+
+interface GameResponse {
+    message: string;
+    next_player: string;
+}
+
+function Journal(props: JournalProp) {
+	return (
+		<div id="journal">
+			{props.msg}
+		</div>
+	)
+}
+
+function RollDice(props: RollDiceProp) {
 
     const [dice1, setDice1] = React.useState<number>(0);
     const [dice2, setDice2] = React.useState<number>(0);
@@ -21,15 +44,17 @@ function RollDice() {
 			method: "post",
 			data: data
 		}).then(res => {
-			// UPDATE site with data
+			let gameResponse:GameResponse = res.data as GameResponse;
+			props.setGameJournal(gameResponse.message);
+			props.setPlayerName(gameResponse.next_player);
 		}, err => {
-			console.log("Error in request");
+			console.error("Error in request");
 		});
-	}
+	};
 
 	return (
 		<div id="dice_roll">
-			RollDice
+			{props.playerName}, RollDice:
 			<input id="dice1" type="number" value={dice1} required
 				   placeholder="Enter value of first dice"
  				   onChange={(e) => setDice1(+e.target.value)}></input>
@@ -43,9 +68,15 @@ function RollDice() {
 
 function App() {
 
+  const [gameJournal, setGameJournal] = React.useState<string>("");
+  const [playerName, setPlayerName] = React.useState<string>("");
+
   return (
     <div className="Monopoly">
-		<RollDice></RollDice>
+		<RollDice setGameJournal={setGameJournal}
+				  setPlayerName={setPlayerName}
+				  playerName={playerName}></RollDice>
+		<Journal msg={gameJournal}></Journal>
 		<div id="actions">
 		</div>
 

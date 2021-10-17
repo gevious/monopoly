@@ -36,7 +36,7 @@ fn ping() -> String {
 //      http://127.0.0.1:8000/roll-dice
 fn roll_dice(input: String,
                    app_state: State<AppState>) -> String {
-    info!("Got Dice: {}", input);
+    //info!("Got Dice: {}", input);
     let dice_roll: DiceRoll = serde_json::from_str(&input).unwrap();
 
     let dice = game::Dice::new(dice_roll.dice1, dice_roll.dice2);

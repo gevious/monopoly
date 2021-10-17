@@ -19,9 +19,15 @@ interface GameResponse {
 }
 
 function Journal(props: JournalProp) {
+	const journal = (msg: string) => {
+		// split string by \n and display in proper html
+		return msg.split(/\n/);
+	}
 	return (
 		<div id="journal">
-			{props.msg}
+			{journal(props.msg).map(item => (
+				<p>{item}</p>
+			))}
 		</div>
 	)
 }
@@ -83,6 +89,7 @@ function App() {
 		<div id="journal">
 		</div>
 
+		{/*
 		<div id="costs">
 			<h1>Costs</h1>
 			<div className="street">
@@ -110,6 +117,7 @@ function App() {
 				</dl>
 			</div>
 		</div>
+		  */}
     </div>
   );
 }

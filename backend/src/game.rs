@@ -407,8 +407,8 @@ impl Game {
 
         // FIXME: web client should be able to support actions, and getting
         // player out of trouble
-        self.get_out_of_trouble();
-        self.execute_user_action();
+//        self.get_out_of_trouble();
+//        self.execute_user_action();
         self.next_player();
         // TODO: We need an elegant way to end the game,
         // otherwise next_player will panic

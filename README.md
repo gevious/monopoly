@@ -87,9 +87,14 @@ Browse to `localhost:3000` to see the application running.
 - [ ] Allow user to control game from website
 - [ ] Push json object to webpage, and reload json every second
 
-## Backend 
+## Web
 - [x] Make game state mutable across sessions
 - [x] Demo frontend works from ipad in dev setup
+- [x] Pass basic game data back to frontend
+- [ ] When giving option to buy street, let user click button yes/no
+- [ ] When rolling double, have player put in another dice roll
+- [ ] When payer is in trouble, don't let anybody roll dice
+- [ ] New game workflow. Start game, get sharable link/code, enter name, start
 - [ ] Design game data structure for display in frontend
 - [ ] Pass game data back to frontend for every roll
 - [ ] Create endpoint for actions
